@@ -85,7 +85,9 @@
   .gCard .lat{font-style:italic;font-size:12px;opacity:.75}
   .gCard p{margin:4px 0 0;font-size:13px;line-height:1.35}
   .gCard .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-top:4px}
-  .t1{background:#d8efd9;color:#1f6b2c}.t2{background:#fbe3b8;color:#7a4a00}
+  .t1{background:#d8efd9;color:#1f6b2c}.t3{background:#b3261e;color:#fff}.t4{background:#2e7d32;color:#fff}
+  .gSec{font:800 14px system-ui;margin:6px 2px 8px}.gSec.tox{color:#b3261e;margin-top:16px}
+  .gCard.toxc{border-left:5px solid #b3261e}.t2{background:#fbe3b8;color:#7a4a00}
   .gCard .alert{font-size:12px;color:#9a3412;margin-top:4px}
   .gCard .cr{font-size:10px;opacity:.55;margin-top:3px}
   .gImg{cursor:zoom-in;position:relative}
@@ -596,15 +598,43 @@ const GUIDE = [
    a:'Pocas confusiones peligrosas; los ejemplares viejos amargan.', ok:true},
   {sp:SPECIES[9], wiki:'Craterellus_cornucopioides', name:'Trompeta de los muertos', when:'Sep – nov', where:'Hayedos, robledales y castañares húmedos',
    d:'Forma de trompeta o embudo hueco, de color gris oscuro a negro. La parte de fuera es lisa o algo arrugada y más clara. Carne fina y elástica. Muy aromática; se seca muy bien.',
-   a:'Difícil de ver entre la hojarasca, pero apenas tiene parecidos peligrosos.', ok:true}
+   a:'Difícil de ver entre la hojarasca, pero apenas tiene parecidos peligrosos.', ok:true},
+  // ---- Tóxicas ----
+  {tox:'MORTAL', sp:'Amanita phalloides', wiki:'Amanita_phalloides', name:'Oronja verde', when:'Ago – nov', where:'Robledales, castañares y hayedos',
+   d:'La seta más peligrosa: causa la mayoría de muertes por setas. Sombrero verde oliva a amarillento, liso y con fibrillas radiales. Láminas siempre blancas. Pie blanco con anillo colgante y la base metida en una volva blanca en forma de saco. Los síntomas tardan 6-12 h en aparecer, cuando el hígado ya está dañado.',
+   a:'Se confunde con rúsulas verdes (Russula virescens, R. cyanoxantha) y champiñones. Diferencias: la rúsula no tiene anillo ni volva y su carne se rompe como tiza; el champiñón tiene láminas rosas o marrones, nunca blancas. Saca siempre la seta entera para ver la base.'},
+  {tox:'MORTAL', sp:'Lepiota brunneoincarnata', wiki:'Lepiota_brunneoincarnata', name:'Lepiotas pequeñas', when:'Sep – nov', where:'Prados, parques, bordes de caminos',
+   d:'Parecen parasoles en miniatura: sombrero de 2 a 8 cm con escamas marrón rosado sobre fondo claro. Pie con zonas escamosas y un anillo poco marcado. Contienen las mismas toxinas que la oronja verde.',
+   a:'Se confunden con el parasol (Macrolepiota procera). Diferencias: el parasol mide más de 15 cm, tiene pie atigrado y un anillo doble que se mueve. Regla básica: nunca recojas “parasoles” de menos de 10 cm.'},
+  {tox:'MORTAL', sp:'Cortinarius orellanus', wiki:'Cortinarius_orellanus', name:'Cortinario de montaña', when:'Ago – oct', where:'Robledales y castañares, suelos ácidos',
+   d:'Sombrero naranja leonado a rojizo, seco y algo fibroso. Láminas color canela oxidado. Pie amarillento con restos de telilla como tela de araña. Destruye los riñones, y los síntomas pueden tardar de 2 a 17 días.',
+   a:'Se confunde con rebozuelos y otras setas anaranjadas. Diferencias: el rebozuelo tiene pliegues gruesos que bajan por el pie, no láminas finas, y es amarillo yema, no anaranjado oxidado.'},
+  {tox:'MORTAL', sp:'Galerina marginata', wiki:'Galerina_marginata', name:'Galerina', when:'Sep – dic', where:'Sobre madera muerta y tocones, en grupos',
+   d:'Seta pequeña marrón miel, con sombrero de 2 a 5 cm, láminas marrones y un anillo fino en el pie. Crece en racimos sobre madera. Tiene las mismas toxinas que la oronja verde.',
+   a:'Se confunde con la armilaria o “seta de miel” y con Kuehneromyces. Diferencias difíciles de ver: no recojas setas pequeñas marrones que crezcan sobre madera.'},
+  {tox:'MUY TÓXICA', sp:'Amanita pantherina', wiki:'Amanita_pantherina', name:'Amanita pantera', when:'Jul – nov', where:'Robledales, hayedos y pinares',
+   d:'Sombrero marrón con verruguitas blancas puras repartidas. Láminas blancas. Anillo liso y una volva en forma de rodete o “calcetín” en la base. Provoca un cuadro neurológico grave: confusión, delirio y convulsiones.',
+   a:'Se confunde con Amanita rubescens (comestible solo bien cocinada). Diferencias: la rubescens enrojece al rozarla, sobre todo en la base del pie y donde la comen los bichos; la pantera nunca enrojece.'},
+  {tox:'TÓXICA', sp:'Amanita muscaria', wiki:'Amanita_muscaria', name:'Matamoscas', when:'Ago – nov', where:'Abedulares y pinares',
+   d:'La seta “de cuento”: sombrero rojo intenso con escamas blancas (la lluvia puede quitarlas). Láminas y pie blancos, con anillo y volva en forma de rodetes. Causa vómitos, alucinaciones y alteraciones nerviosas.',
+   a:'Se confunde con la amanita de los Césares. Diferencias: la de los Césares tiene láminas, anillo y pie amarillos, y una volva grande y blanca como cáscara de huevo; la matamoscas los tiene blancos.'},
+  {tox:'TÓXICA', sp:'Rubroboletus satanas', wiki:'Rubroboletus_satanas', name:'Boleto de Satanás', when:'Jul – oct', where:'Robles y castaños, suelos calizos y cálidos',
+   d:'Sombrero blanquecino grisáceo, muy grueso. Poros rojos. Pie barrigudo, rojo con redecilla. La carne azulea al cortarla y huele mal en los ejemplares viejos. Provoca vómitos y diarreas fuertes.',
+   a:'Se confunde con andoas y boletos. Diferencias: los boletos comestibles tienen los poros blancos o amarillos (nunca rojos) y su carne no cambia de color.'},
+  {tox:'TÓXICA', sp:'Omphalotus olearius', wiki:'Omphalotus_olearius', name:'Seta del olivo', when:'Sep – dic', where:'En grupos sobre tocones o raíces de castaño, roble y olivo',
+   d:'Color naranja intenso, en forma de embudo, crece en ramilletes sobre madera. Láminas verdaderas, finas y apretadas, que bajan por el pie. Provoca vómitos y diarreas intensas.',
+   a:'Se confunde con el rebozuelo. Diferencias: el rebozuelo crece suelto en el suelo, tiene pliegues gruesos (no láminas) y es amarillo yema.'},
+  {tox:'TÓXICA', sp:'Entoloma sinuatum', wiki:'Entoloma_sinuatum', name:'Pérfida', when:'Sep – nov', where:'Robledales y hayedos, a veces en corros',
+   d:'Seta grande, de 8 a 20 cm, de color gris blanquecino con brillo sedoso. Láminas amarillentas de joven que se vuelven rosadas. Pie blanco sin anillo. Olor a harina. Causa gastroenteritis muy fuerte.',
+   a:'Se confunde con setas de chopo, la seta de San Jorge y Clitocybe nebularis. Diferencias: las láminas rosadas de adulta y el olor a harina rancia.'}
 ];
 let guideLoaded = false;
 function renderGuide(){
-  $('guideList').innerHTML = GUIDE.map((g,i) => `<div class="gCard">
+  $('guideList').innerHTML = GUIDE.map((g,i) => `${i===0 ? '<div class="gSec">🍄 Comestibles del selector</div>' : ''}${g.tox && !GUIDE[i-1].tox ? '<div class="gSec tox">☠ Tóxicas y mortales: aprende a distinguirlas</div>' : ''}<div class="gCard${g.tox ? ' toxc' : ''}">
     <div class="gImg" id="gi${i}">🍄</div>
     <div><h4>${g.name}</h4><div class="lat">${g.sp.split(' (')[0]}</div>
-      <span class="tag t1">📅 ${g.when}</span> <span class="tag t2">🌲 ${g.where}</span>
-      <p>${g.d}</p><div class="alert">⚠ ${g.a}</div><div class="cr" id="gc${i}"></div></div></div>`).join('');
+      ${g.tox ? `<span class="tag t3">☠ ${g.tox}</span> ` : '<span class="tag t4">✔ Comestible</span> '}<span class="tag t1">📅 ${g.when}</span> <span class="tag t2">🌲 ${g.where}</span>
+      <p>${g.d}</p><div class="alert">${g.tox ? '🔎' : '⚠'} ${g.a}</div><div class="cr" id="gc${i}"></div></div></div>`).join('');
   if (guideLoaded) return; guideLoaded = true;
   GUIDE.forEach((g,i) => {
     const tryWiki = lang => fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${g.wiki}`).then(r => r.ok ? r.json() : null).catch(() => null);
