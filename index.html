@@ -50,6 +50,18 @@
   .sheet2{background:var(--crema);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box}
   .sheet2 h3{margin:0 0 6px}
   .sheet2 .col{display:flex;flex-direction:column;gap:8px}
+  #carChip{position:absolute;top:calc(66px + env(safe-area-inset-top));right:10px;z-index:1000;display:none;align-items:center;gap:6px;padding:5px 10px 5px 5px;font:600 13px system-ui}
+  #carArrow{width:26px;height:26px}
+  .stGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stGrid div{background:#e9e2d0;border-radius:12px;padding:10px}
+  .stGrid b{display:block;font-size:20px}
+  .stGrid span{font-size:12px;opacity:.75}
+  .spList{margin:12px 0 0;padding:0;list-style:none;font-size:14px}
+  .spList li{display:flex;justify-content:space-between;border-bottom:1px solid #ddd3bd;padding:6px 2px}
+  .hItem{background:#e9e2d0;border-radius:12px;padding:10px;margin-bottom:8px;font-size:14px}
+  .hItem.cur{outline:3px solid var(--bosque)}
+  .hItem .hb{display:flex;gap:6px;margin-top:8px}
+  .hItem .hb button{flex:1;padding:8px;font-size:13px}
   .sheet2 button{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600}
   /* Impresión / PDF */
   @media print{
@@ -82,7 +94,8 @@
   </svg>
   <div id="coords">--.-----° N<br>--.-----° O<br><small id="hdg">Rumbo --</small></div>
 </div>
-<div id="status" class="panel"><span id="st">Buscando GPS…</span><br><span id="stats">0 m² · 0 🍄</span></div>
+<div id="status" class="panel"><span id="st">Buscando GPS…</span><br><span id="stats">0 m · 0 🍄</span></div>
+<div id="carChip" class="panel"><svg viewBox="0 0 40 40" id="carArrow"><path d="M20 4 L31 32 L20 25 L9 32 Z" fill="#c8553d" stroke="#fff" stroke-width="2"/></svg><span id="carTxt">🚗 --</span></div>
 <div id="toast"></div>
 
 <div id="bar">
@@ -91,7 +104,7 @@
   <button id="bFollow" class="on">🎯 Seguir</button>
   <button id="bMap">🛰 Capa</button>
   <button id="bPdf">📄 PDF</button>
-  <button id="bMore">⋯</button>
+  <button id="bMore">☰ Menú</button>
 </div>
 
 <div id="modal"><div id="sheet">
@@ -102,12 +115,15 @@
     <label for="mOther">Nombre de la seta</label>
     <input id="mOther" placeholder="Escribe la especie">
   </div>
+  <label for="mQty">Cantidad (unidades)</label>
+  <input id="mQty" type="number" min="1" step="1" inputmode="numeric" value="1">
   <label for="mDate">Fecha y hora de recogida</label>
   <input id="mDate" type="datetime-local">
   <label for="mNote">Notas (opcional)</label>
   <input id="mNote" placeholder="Cantidad, estado, árbol cercano…">
   <label>Ubicación</label>
   <div class="meta" id="mLoc"></div>
+  <button class="bNo" id="mMove" style="width:100%;margin-top:8px;border:0;border-radius:12px;padding:10px;font-size:14px;font-weight:600">📍 Cambiar posición en el mapa</button>
   <div class="row">
     <button class="bDel" id="mDel">Borrar</button>
     <button class="bNo" id="mCancel">Cancelar</button>
@@ -115,6 +131,28 @@
   </div>
 </div></div>
 
+<div id="menuModal" class="mModal"><div class="sheet2">
+  <h3>Menú</h3>
+  <div class="col">
+    <button class="bOk" id="uStats">📊 Estadísticas de la salida</button>
+    <button class="bOk" id="uCar">🚗 Marcar el coche aquí</button>
+    <button class="bOk" id="uNew">➕ Empezar nueva salida</button>
+    <button class="bNo" id="uHist">🗂 Mis salidas</button>
+    <div style="display:flex;gap:8px"><button class="bNo" id="uExp" style="flex:1">⬇ Exportar</button><button class="bNo" id="uImp" style="flex:1">⬆ Importar</button></div>
+    <button class="bDel" id="uClear">🧹 Borrar rastro de esta salida</button>
+    <button class="bNo" id="uClose">Cerrar</button>
+  </div>
+</div></div>
+<div id="statsModal" class="mModal"><div class="sheet2">
+  <h3>📊 Estadísticas</h3>
+  <div id="statsBody"></div>
+  <div class="col" style="margin-top:12px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
+</div></div>
+<div id="histModal" class="mModal"><div class="sheet2">
+  <h3>🗂 Mis salidas</h3>
+  <div id="histList" style="max-height:55vh;overflow:auto"></div>
+  <div class="col" style="margin-top:12px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
+</div></div>
 <div id="pdfModal" class="mModal"><div class="sheet2">
   <h3>📄 Informe de la salida</h3>
   <p id="pdfMsg"></p>
@@ -144,12 +182,23 @@ const SPECIES = [
 const $ = id => document.getElementById(id);
 const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let data = {trail:[], setas:[]};
-try { const s = localStorage.getItem(KEY); if (s) data = JSON.parse(s); } catch(e){}
-data.setas.forEach(s => { if (!s.species && s.note !== undefined) { s.species = s.note || 'Sin especificar'; s.note = ''; } });
+const KEY2 = 'rastroseta_v2';
+const newSession = () => ({id:Date.now(), start:Date.now(), lastT:null, trail:[], setas:[], car:null, dist:0, gain:0, movingMs:0});
+let store = null;
+try { const s = localStorage.getItem(KEY2); if (s) store = JSON.parse(s); } catch(e){}
+if (!store) {  // migrar datos de la versión anterior
+  const first = newSession();
+  try { const old = JSON.parse(localStorage.getItem(KEY) || 'null'); if (old) { first.trail = old.trail || []; first.setas = old.setas || [];
+    if (first.setas.length) first.start = Math.min(...first.setas.map(x=>x.t)); } } catch(e){}
+  store = {current:first.id, sessions:[first]};
+}
+store.sessions.forEach(ss => ss.setas.forEach(x => { if (!x.species) { x.species = x.note || 'Sin especificar'; x.note = ''; } if (!x.qty) x.qty = 1; }));
+let data = store.sessions.find(x => x.id === store.current) || store.sessions[store.sessions.length-1];
+const clean = ss => ({...ss, setas: ss.setas.map(({_m,...r})=>r)});
+const fmtDist = m => m < 1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(2).replace('.',',')} km`;
 const persist = () => {
-  try { localStorage.setItem(KEY, JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})); } catch(e){}
-  $('stats').textContent = `~${Math.round(data.trail.length * MIN_STEP * RADIUS * 2)} m² · ${data.setas.length} 🍄`;
+  try { localStorage.setItem(KEY2, JSON.stringify({current:data.id, sessions:store.sessions.map(clean)})); } catch(e){ toast && toast('⚠ No se pudo guardar'); }
+  $('stats').textContent = `${fmtDist(data.dist||0)} · ${data.setas.reduce((a,x)=>a+(x.qty||1),0)} 🍄`;
 };
 
 // ---------- Mapa ----------
@@ -195,10 +244,18 @@ function openModal(s, latlng){
   $('mSpecies').onchange();
   $('mDate').value = toLocalInput(t);
   $('mNote').value = s ? (s.note||'') : '';
+  $('mQty').value = s ? (s.qty||1) : 1;
   $('mLoc').innerHTML = `${fmtLat(lat)} · ${fmtLng(lng)}<br>${s ? 'Recogida el ' + fmtDate(s.t) : 'Ahora: ' + fmtDate(t)}`;
   $('mDel').style.display = s ? 'block' : 'none';
   $('modal').classList.add('show');
 }
+// Cambiar la posición: se cierra la ficha y el siguiente toque en el mapa la recoloca
+let moving = null;
+$('mMove').onclick = () => {
+  moving = {s:editing, draft:{species:$('mSpecies').value, other:$('mOther').value, date:$('mDate').value, note:$('mNote').value, qty:$('mQty').value}};
+  $('modal').classList.remove('show'); setAdd(true); $('bSeta').textContent = 'Toca la nueva posición';
+};
+function restoreDraft(d){ $('mSpecies').value = d.species; $('mOther').value = d.other; $('mSpecies').onchange(); $('mDate').value = d.date; $('mNote').value = d.note; $('mQty').value = d.qty; }
 const closeModal = () => { $('modal').classList.remove('show'); editing = pending = null; };
 $('mCancel').onclick = closeModal;
 $('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
@@ -206,8 +263,9 @@ $('mSave').onclick = () => {
   let species = $('mSpecies').value === '__other' ? $('mOther').value.trim() : $('mSpecies').value;
   if (!species) { $('mOther').focus(); return; }
   const t = $('mDate').value ? new Date($('mDate').value).getTime() : Date.now();
-  if (editing) Object.assign(editing, {species, t, note:$('mNote').value.trim()});
-  else data.setas.push({lat:+pending.lat.toFixed(7), lng:+pending.lng.toFixed(7), t, species, note:$('mNote').value.trim()});
+  const qty = Math.max(1, parseInt($('mQty').value) || 1);
+  if (editing) Object.assign(editing, {species, t, qty, note:$('mNote').value.trim()});
+  else data.setas.push({lat:+pending.lat.toFixed(7), lng:+pending.lng.toFixed(7), t, qty, species, note:$('mNote').value.trim()});
   refreshSetaMarkers(); persist(); closeModal(); setAdd(false);
 };
 $('mDel').onclick = () => {
@@ -217,6 +275,7 @@ $('mDel').onclick = () => {
 };
 
 // ---------- Posición, flecha y brújula ----------
+let statPos = null, prevFix = null, baseAlt = null;
 let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
 let shown = null, filt = null, anim = null, lastFixT = 0, targetHeading = null, shownHeading = null;
 function frame(){
@@ -253,6 +312,7 @@ const cardinal = h => ['N','NE','E','SE','S','SO','O','NO'][Math.round(h/45)%8];
 function updateHeading(){
   const h = moveHeading ?? compassHeading;  // caminando: rumbo GPS; parado: brújula
   if (h != null) targetHeading = h;
+  updateCar();
   const dev = compassHeading ?? moveHeading;   // la aguja usa la orientación real del móvil
   if (dev != null) targetRose = dev;
   if (h != null) {
@@ -291,6 +351,21 @@ function onPos(pos){
   if (!lastHeadPos) lastHeadPos = ll;
   updateHeading();
   $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'grabando':'pausado'}`;
+  if (recording && acc <= MAX_ACC) {
+    const now = Date.now();
+    if (statPos) { const d = statPos.distanceTo(ll); if (d >= Math.max(2, acc/4)) { data.dist += d; statPos = ll; } } else statPos = ll;
+    if (data.lastT && now - data.lastT < 30000 && (speed > 0.3 || (prevFix && prevFix.distanceTo(ll) > 0.5))) data.movingMs += now - data.lastT;
+    data.lastT = now; prevFix = ll;
+    const alt = pos.coords.altitude, altAcc = pos.coords.altitudeAccuracy;
+    if (alt != null && (altAcc == null || altAcc < 15)) {
+      if (baseAlt == null) baseAlt = alt;
+      else if (alt - baseAlt > 3) { data.gain += alt - baseAlt; baseAlt = alt; }
+      else if (baseAlt - alt > 3) baseAlt = alt;
+      data.altMax = Math.max(data.altMax ?? alt, alt); data.altMin = Math.min(data.altMin ?? alt, alt);
+    }
+    if (!data.trail.length && !data.setas.length) data.start = now;
+  }
+  updateCar();
   if (!recording || acc > MAX_ACC) return;
   if (last){
     const d = last.distanceTo(ll);
@@ -333,32 +408,140 @@ async function lock(){ try { await navigator.wakeLock.request('screen'); } catch
 lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible') lock(); });
 
 // ---------- Botones ----------
-map.on('click', e => { if (addMode) openModal(null, e.latlng); });
+map.on('click', e => {
+  if (!addMode) return;
+  if (moving) { const m = moving; moving = null; setAdd(false);
+    if (m.s) { m.s.lat = +e.latlng.lat.toFixed(7); m.s.lng = +e.latlng.lng.toFixed(7); m.s._m.setLatLng(e.latlng); openModal(m.s); }
+    else openModal(null, e.latlng);
+    restoreDraft(m.draft); return; }
+  openModal(null, e.latlng);
+});
 map.on('movestart zoomstart', e => {}); map.getContainer().addEventListener('touchstart', () => userTouching = true, {passive:true}); map.getContainer().addEventListener('touchend', () => setTimeout(()=>userTouching=false, 300), {passive:true});
 map.on('dragstart', () => { follow = false; $('bFollow').classList.remove('on'); });
 $('bRec').onclick = () => { recording = !recording; last = null; $('bRec').classList.toggle('on', recording); $('bRec').textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
 function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
-$('bSeta').onclick = () => setAdd(!addMode);
+$('bSeta').onclick = () => {
+  if (addMode) { setAdd(false); moving = null; return; }
+  if (me) { navigator.vibrate && navigator.vibrate(30); openModal(null, shown ? L.latLng(shown) : me.getLatLng()); }
+  else { setAdd(true); toast('Sin GPS: toca el mapa donde está la seta'); }
+};
 $('bFollow').onclick = () => { follow = !follow; $('bFollow').classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
 $('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); };
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(()=>t.style.display='none', 3000); }
 
-$('bMore').onclick = () => {
-  const o = prompt('1 = Añadir seta en mi posición\n2 = Exportar datos (.json)\n3 = Importar datos\n4 = Borrar rastro\n5 = Borrar todo', '');
-  if (o==='1') { if (me) openModal(null, me.getLatLng()); else alert('Aún no hay posición GPS'); }
-  if (o==='2'){ const blob = new Blob([JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})],{type:'application/json'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rastro-seta-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
-  if (o==='3'){ const i = document.createElement('input'); i.type='file'; i.accept='.json,application/json';
-    i.onchange = () => { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result);
-      (d.trail||[]).forEach(p=>{data.trail.push(p); drawPoint(p);});
-      (d.setas||[]).forEach(s=>{ if (!s.species) { s.species = s.note || 'Sin especificar'; s.note=''; } data.setas.push(s); });
-      refreshSetaMarkers(); persist(); toast('Datos importados'); } catch(e){ alert('Archivo no válido'); } };
-      r.readAsText(i.files[0]); }; i.click(); }
-  if ((o==='4'||o==='5') && confirm('¿Seguro? No se puede deshacer.')){
-    trailLayer.clearLayers(); data.trail = []; last = null;
-    if (o==='5'){ data.setas.forEach(s=>map.removeLayer(s._m)); data.setas = []; }
-    persist(); }
+const show = id => $(id).classList.add('show'), hide = id => $(id).classList.remove('show');
+document.querySelectorAll('.mModal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); }));
+$('bMore').onclick = () => { $('uCar').textContent = data.car ? '🚗 Quitar marca del coche' : '🚗 Marcar el coche aquí'; show('menuModal'); };
+$('uClose').onclick = () => hide('menuModal');
+
+// --- Coche ---
+let carMarker = null;
+const carIcon = L.divIcon({className:'', html:'<div class="seta" style="font-size:30px">🚗</div>', iconSize:[30,30], iconAnchor:[15,22]});
+function drawCar(){
+  if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
+  if (data.car) { carMarker = L.marker([data.car.lat, data.car.lng], {icon:carIcon}).addTo(map);
+    carMarker.on('click', () => { if (confirm('¿Quitar la marca del coche?')) { data.car = null; drawCar(); persist(); } }); }
+  updateCar();
+}
+function updateCar(){
+  const chip = $('carChip');
+  if (!data.car) { chip.style.display = 'none'; return; }
+  chip.style.display = 'flex';
+  const here = shown ? L.latLng(shown) : (me && me.getLatLng());
+  if (!here) { $('carTxt').textContent = '🚗 esperando GPS'; return; }
+  const c = L.latLng(data.car.lat, data.car.lng), d = here.distanceTo(c);
+  const ref = compassHeading ?? moveHeading;
+  const rel = bearing(here, c) - (ref ?? 0);
+  $('carArrow').style.transform = `rotate(${rel}deg)`;
+  $('carArrow').style.opacity = ref == null ? .35 : 1;
+  $('carTxt').textContent = `🚗 ${fmtDist(d)} ${ref == null ? cardinal(bearing(here, c)) : ''}`;
+}
+$('carChip').onclick = () => { if (data.car && me) { follow = false; $('bFollow').classList.remove('on');
+  map.fitBounds(L.latLngBounds([me.getLatLng(), [data.car.lat, data.car.lng]]), {padding:[80,80], maxZoom:19}); } };
+$('uCar').onclick = () => {
+  hide('menuModal');
+  if (data.car) { if (confirm('¿Quitar la marca del coche?')) { data.car = null; drawCar(); persist(); } return; }
+  if (!me) { alert('Aún no hay posición GPS'); return; }
+  const p = shown ? L.latLng(shown) : me.getLatLng();
+  data.car = {lat:+p.lat.toFixed(7), lng:+p.lng.toFixed(7), t:Date.now()}; drawCar(); persist(); toast('🚗 Coche marcado');
 };
+
+// --- Estadísticas ---
+const fmtDur = ms => { const m = Math.round(ms/60000); return m < 60 ? `${m} min` : `${Math.floor(m/60)} h ${String(m%60).padStart(2,'0')} min`; };
+function speciesCounts(ss){ const c = {}; ss.setas.forEach(x => c[x.species] = (c[x.species]||0) + (x.qty||1)); return Object.entries(c).sort((a,b)=>b[1]-a[1]); }
+function statsOf(ss){
+  const end = ss.lastT || Math.max(ss.start, ...ss.setas.map(x=>x.t));
+  return {dist:ss.dist||0, total:Math.max(0, end - ss.start), moving:ss.movingMs||0, gain:Math.round(ss.gain||0),
+          area:Math.round(ss.trail.length * MIN_STEP * RADIUS * 2), units:ss.setas.reduce((a,x)=>a+(x.qty||1),0), spots:ss.setas.length,
+          altMin:ss.altMin, altMax:ss.altMax};
+}
+$('uStats').onclick = () => {
+  hide('menuModal'); const st = statsOf(data);
+  const sp = speciesCounts(data);
+  $('statsBody').innerHTML = `<p style="margin:0 0 10px;font-size:13px">Salida del ${fmtDate(data.start)}</p>
+    <div class="stGrid">
+      <div><b>${fmtDist(st.dist)}</b><span>Distancia caminada</span></div>
+      <div><b>${fmtDur(st.total)}</b><span>Tiempo total</span></div>
+      <div><b>${fmtDur(st.moving)}</b><span>En movimiento</span></div>
+      <div><b>${st.gain} m</b><span>Desnivel acumulado ↑${st.altMax!=null ? ` · ${Math.round(st.altMin)}–${Math.round(st.altMax)} m` : ''}</span></div>
+      <div><b>${st.units}</b><span>Setas (${st.spots} puntos)</span></div>
+      <div><b>${st.area} m²</b><span>Zona rastreada</span></div>
+    </div>
+    ${sp.length ? '<ul class="spList">' + sp.map(([k,v]) => `<li><span>${esc(k)}</span><b>${v}</b></li>`).join('') + '</ul>' : ''}`;
+  show('statsModal');
+};
+
+// --- Salidas ---
+function loadSession(ss){
+  data.setas.forEach(x => { if (x._m) { map.removeLayer(x._m); delete x._m; } });
+  trailLayer.clearLayers();
+  data = ss; store.current = ss.id; last = null; statPos = null; prevFix = null; baseAlt = null;
+  data.trail.forEach(drawPoint); refreshSetaMarkers(); drawCar(); persist();
+  const pts = data.trail.map(p=>L.latLng(p)).concat(data.setas.map(x=>L.latLng(x.lat,x.lng)));
+  if (pts.length) { follow = false; $('bFollow').classList.remove('on'); map.fitBounds(L.latLngBounds(pts), {padding:[60,60], maxZoom:19}); }
+}
+$('uNew').onclick = () => {
+  hide('menuModal');
+  if (!data.trail.length && !data.setas.length) { data.start = Date.now(); data.dist = 0; data.movingMs = 0; data.gain = 0; persist(); toast('Nueva salida iniciada'); return; }
+  if (!confirm('¿Terminar esta salida y empezar una nueva? La actual queda guardada en "Mis salidas".')) return;
+  const ns = newSession(); if (data.car) ns.car = data.car; store.sessions.push(ns); loadSession(ns);
+  follow = true; $('bFollow').classList.add('on'); toast('Nueva salida iniciada');
+};
+function renderHist(){
+  $('histList').innerHTML = store.sessions.slice().reverse().map(ss => { const st = statsOf(ss);
+    return `<div class="hItem ${ss.id===data.id?'cur':''}"><b>${new Date(ss.start).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b>${ss.id===data.id?' · actual':''}<br>
+      ${fmtDist(st.dist)} · ${fmtDur(st.total)} · ${st.units} 🍄
+      <div class="hb">${ss.id===data.id?'':`<button class="bOk" data-open="${ss.id}">Abrir</button>`}<button class="bDel" data-del="${ss.id}">Borrar</button></div></div>`; }).join('');
+}
+$('uHist').onclick = () => { hide('menuModal'); renderHist(); show('histModal'); };
+$('histList').onclick = e => {
+  const o = e.target.dataset.open, d = e.target.dataset.del;
+  if (o) { loadSession(store.sessions.find(x => x.id == o)); hide('histModal'); toast('Salida abierta'); }
+  if (d && confirm('¿Borrar esta salida para siempre?')) {
+    const ss = store.sessions.find(x => x.id == d); store.sessions.splice(store.sessions.indexOf(ss), 1);
+    if (ss === data) loadSession(store.sessions[store.sessions.length-1] || (store.sessions.push(newSession()), store.sessions[0]));
+    else persist();
+    renderHist();
+  }
+};
+
+// --- Exportar / importar / borrar ---
+$('uExp').onclick = () => { hide('menuModal');
+  const blob = new Blob([JSON.stringify({version:2, sessions:store.sessions.map(clean)})],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rastro-seta-'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove(); };
+$('uImp').onclick = () => { hide('menuModal'); const i = document.createElement('input'); i.type='file'; i.accept='.json,application/json';
+  i.onchange = () => { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result);
+    const list = d.sessions || [{...newSession(), trail:d.trail||[], setas:d.setas||[]}];
+    let n = 0; list.forEach(ss => { if (store.sessions.some(x => x.id === ss.id)) return;
+      ss.setas = (ss.setas||[]).map(x => ({...x, species:x.species || x.note || 'Sin especificar', qty:x.qty||1}));
+      store.sessions.push({...newSession(), ...ss}); n++; });
+    store.sessions.sort((a,b)=>a.start-b.start); persist(); toast(`${n} salida(s) importada(s)`); } catch(e){ alert('Archivo no válido'); } };
+    r.readAsText(i.files[0]); }; i.click(); };
+$('uClear').onclick = () => { hide('menuModal');
+  if (!confirm('¿Borrar el rastro verde de esta salida? Las setas se mantienen.')) return;
+  trailLayer.clearLayers(); data.trail = []; last = null; persist(); };
+
+drawCar();
 
 // ---------- Informe PDF + compartir ----------
 let jspdfP = null;
@@ -417,13 +600,14 @@ async function buildPdf(){
   let y = 25;
   doc.text(`Generado el ${pdfDate(Date.now())}`, M, y); y += 5;
   if (times.length) { doc.text(`Setas recogidas entre ${pdfDate(Math.min(...times))} y ${pdfDate(Math.max(...times))}`, M, y); y += 5; }
-  doc.text(`Zona recorrida aprox.: ${area} m2   ·   Setas encontradas: ${data.setas.length}`, M, y); y += 4;
+  const st = statsOf(data);
+  doc.text(`Distancia: ${fmtDist(st.dist)}   ·   Tiempo: ${fmtDur(st.total)} (${fmtDur(st.moving)} en movimiento)   ·   Desnivel: +${st.gain} m`, M, y); y += 5;
+  doc.text(`Zona rastreada aprox.: ${area} m2   ·   Setas: ${st.units} en ${st.spots} puntos`, M, y); y += 4;
   const ih = PW * 1100/1600; doc.addImage(img, 'JPEG', M, y, PW, ih); doc.setDrawColor(150); doc.rect(M, y, PW, ih); y += ih + 7;
-  const counts = {}; data.setas.forEach(s => counts[s.species] = (counts[s.species]||0)+1);
   if (data.setas.length) {
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(43,58,44); doc.text('Resumen por especie', M, y); y += 5;
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40);
-    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => { if (y > 280) { doc.addPage(); y = 18; } doc.text(`- ${k}: ${v}`, M+2, y); y += 5; });
+    speciesCounts(data).forEach(([k,v]) => { if (y > 280) { doc.addPage(); y = 18; } doc.text(`- ${k}: ${v}`, M+2, y); y += 5; });
     y += 4;
     const cols = [[M,'Nº',10],[M+10,'Especie',62],[M+72,'Fecha y hora',32],[M+104,'Ubicación',40],[M+144,'Notas',42]];
     const header = () => { doc.setFillColor(233,226,208); doc.rect(M, y-4.5, PW, 7, 'F'); doc.setFont('helvetica','bold'); doc.setFontSize(9);
@@ -431,7 +615,7 @@ async function buildPdf(){
     if (y > 260) { doc.addPage(); y = 18; }
     header();
     data.setas.forEach((s,i) => {
-      const cells = [String(i+1), doc.splitTextToSize(s.species, 59), pdfDate(s.t), [fmtLat(s.lat), fmtLng(s.lng)], doc.splitTextToSize(s.note||'', 40)];
+      const cells = [String(i+1), doc.splitTextToSize(s.species + ((s.qty||1) > 1 ? ` (x${s.qty})` : ''), 59), pdfDate(s.t), [fmtLat(s.lat), fmtLng(s.lng)], doc.splitTextToSize(s.note||'', 40)];
       const h = Math.max(...cells.map(c => Array.isArray(c) ? c.length : 1)) * 4 + 2;
       if (y + h > 285) { doc.addPage(); y = 18; header(); }
       cols.forEach(([x,,w],j) => doc.text(cells[j], x+1.5, y));
@@ -441,10 +625,11 @@ async function buildPdf(){
   return doc.output('blob');
 }
 
-const pdfName = () => 'rastro-seta-' + new Date().toISOString().slice(0,10) + '.pdf';
+const pdfName = () => 'rastro-seta-' + new Date(data.start).toISOString().slice(0,10) + '.pdf';
 const summaryText = () => {
-  const lines = data.setas.map((s,i) => `${i+1}. ${s.species} - ${pdfDate(s.t)}\n   https://maps.google.com/?q=${s.lat},${s.lng}${s.note ? '\n   ' + s.note : ''}`);
-  return `🍄 Rastro Seta - salida del ${new Date().toLocaleDateString('es-ES')}\nSetas encontradas: ${data.setas.length}\n\n${lines.join('\n')}`;
+  const st = statsOf(data);
+  const lines = data.setas.map((s,i) => `${i+1}. ${s.species}${(s.qty||1)>1?' x'+s.qty:''} - ${pdfDate(s.t)}\n   https://maps.google.com/?q=${s.lat},${s.lng}${s.note ? '\n   ' + s.note : ''}`);
+  return `🍄 Rastro Seta - salida del ${new Date(data.start).toLocaleDateString('es-ES')}\n${fmtDist(st.dist)} · ${fmtDur(st.total)} · +${st.gain} m\nSetas: ${st.units}\n\n${lines.join('\n')}`;
 };
 let pdfBlob = null;
 $('bPdf').onclick = async () => {
