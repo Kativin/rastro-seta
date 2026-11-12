@@ -20,19 +20,33 @@
   #map{position:absolute;inset:0}
   .trail-pane{opacity:.45}
   .panel{background:rgba(244,239,227,.95);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-  #compass{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:1000;display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px}
+  #top{position:absolute;top:0;left:0;right:0;z-index:1000;pointer-events:none}
+  #top > *{pointer-events:auto}
+  #hdr{background:var(--bosque);color:var(--crema);display:flex;align-items:center;justify-content:space-between;gap:8px;
+       padding:calc(8px + env(safe-area-inset-top)) 10px 8px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  #compass{display:flex;align-items:center;gap:8px;min-width:0}
+  #status{display:flex;justify-content:space-between;gap:8px;background:#3b4d3c;color:var(--crema);font:600 12px system-ui;padding:5px 12px}
+  #floats{display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding:8px 10px;pointer-events:none!important}
+  #floats > *{pointer-events:auto}
+  #tbtns{display:flex;gap:6px;flex:none}
+  .tb{width:54px;height:50px;border:0;border-radius:12px;background:rgba(244,239,227,.12);color:var(--crema);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0}
+  .tb span{font-size:20px;line-height:22px}
+  .tb small{font:600 10px system-ui}
+  .tb.on{background:var(--teja);color:#fff}
+  #toast{background:var(--teja);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none;align-self:center;white-space:nowrap}
+  #carChip{display:none;align-items:center;gap:6px;padding:5px 10px 5px 5px;font:600 13px system-ui}
+  #bar{position:absolute;left:0;right:0;bottom:0;z-index:1000;display:flex;align-items:flex-end;gap:12px;padding:0 14px calc(14px + env(safe-area-inset-bottom));pointer-events:none}
+  #bar button{pointer-events:auto;border:0;box-shadow:0 3px 12px rgba(0,0,0,.4);font-weight:700}
+  #bRec{flex:1;height:64px;border-radius:18px;font-size:18px;background:#2e9e4f;color:#fff}
+  #bRec.on{background:var(--teja)}
+  #bSeta{width:96px;height:96px;flex:none;border-radius:22px;background:var(--crema);color:var(--bosque);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0}
+  #bSeta span{font-size:44px;line-height:48px}
+  #bSeta small{font:700 12px system-ui}
+  #bSeta.on{background:var(--teja);color:#fff}
   #rose{width:46px;height:46px;flex:none}
-  #coords{font:600 12px/1.35 ui-monospace,Menlo,monospace}
-  #coords small{font:500 11px system-ui;opacity:.7}
-  #status{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:1000;padding:6px 10px;font-size:12px;text-align:right;line-height:1.4}
-  #bar{position:absolute;left:0;right:0;bottom:0;z-index:1000;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;
-       padding:10px 8px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}
-  #bar button{border:0;border-radius:14px;padding:11px 12px;font-size:14px;font-weight:600;background:var(--crema);color:var(--bosque);box-shadow:0 2px 8px rgba(0,0,0,.3)}
-  #bar button.on{background:var(--teja);color:#fff}
-  #bar #bRec{background:#2e9e4f;color:#fff}
-  #bar #bRec.on{background:var(--teja)}
-  #zoneHint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom));z-index:1001;background:var(--bosque);color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;display:none;text-align:center}
-  #toast{position:absolute;top:calc(74px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:var(--teja);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none;white-space:nowrap}
+  #coords{font:600 12px/1.35 ui-monospace,Menlo,monospace;color:var(--crema)}
+  #coords small{font:500 11px system-ui;opacity:.8}
+  #zoneHint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(122px + env(safe-area-inset-bottom));z-index:1001;background:var(--bosque);color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;display:none;text-align:center}
   .arrow{width:34px;height:34px;will-change:transform}
   .seta{position:relative;font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .seta b{position:absolute;right:-6px;top:-6px;background:var(--bosque);color:#fff;font:700 10px system-ui;border-radius:9px;min-width:16px;height:16px;line-height:16px;padding:0 3px}
@@ -53,7 +67,6 @@
   .sheet2{background:var(--crema);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box}
   .sheet2 h3{margin:0 0 6px}
   .sheet2 .col{display:flex;flex-direction:column;gap:8px}
-  #carChip{position:absolute;top:calc(66px + env(safe-area-inset-top));right:10px;z-index:1000;display:none;align-items:center;gap:6px;padding:5px 10px 5px 5px;font:600 13px system-ui}
   #carArrow{width:26px;height:26px}
   .stGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .stGrid div{background:#e9e2d0;border-radius:12px;padding:10px}
@@ -70,7 +83,7 @@
   @media print{
     @page{size:A4;margin:12mm}
     body{background:#fff}
-    #bar,#status,#toast,#modal,.leaflet-control-container{display:none!important}
+    #bar,#top,#zoneHint,#modal,.leaflet-control-container{display:none!important}
     #compass{display:none!important}
     #map{position:relative!important;width:100%!important;height:120mm!important;border:1px solid #999;page-break-inside:avoid}
     #report{display:block;font-size:11pt}
@@ -87,27 +100,35 @@
 <div id="report"></div>
 <div id="map"></div>
 
-<div id="compass" class="panel">
-  <svg id="rose" viewBox="-50 -50 100 100">
-    <circle r="47" fill="#fff" stroke="#2b3a2c" stroke-width="3"/>
-    <g id="roseG">
-      <polygon points="0,-40 9,0 -9,0" fill="#c8553d"/>
-      <polygon points="0,40 9,0 -9,0" fill="#2b3a2c"/>
-    </g>
-  </svg>
-  <div id="coords">--.-----° N<br>--.-----° O<br><small id="hdg">Rumbo --</small></div>
+<div id="top">
+  <header id="hdr">
+    <div id="compass">
+      <svg id="rose" viewBox="-50 -50 100 100">
+        <circle r="47" fill="#fff" stroke="#e8e0cc" stroke-width="3"/>
+        <g id="roseG">
+          <polygon points="0,-40 9,0 -9,0" fill="#c8553d"/>
+          <polygon points="0,40 9,0 -9,0" fill="#2b3a2c"/>
+        </g>
+      </svg>
+      <div id="coords">--.-----° N<br>--.-----° O<br><small id="hdg">Rumbo --</small></div>
+    </div>
+    <div id="tbtns">
+      <button id="bFollow" class="tb on"><span>🎯</span><small>Centrar</small></button>
+      <button id="bMap" class="tb"><span>🛰</span><small>Satélite</small></button>
+      <button id="bMore" class="tb"><span>☰</span><small>Menú</small></button>
+    </div>
+  </header>
+  <div id="status"><span id="st">Buscando GPS…</span><span id="stats">0 m · 0 🍄</span></div>
+  <div id="floats">
+    <div id="carChip" class="panel"><svg viewBox="0 0 40 40" id="carArrow"><path d="M20 4 L31 32 L20 25 L9 32 Z" fill="#c8553d" stroke="#fff" stroke-width="2"/></svg><span id="carTxt">🚗 --</span></div>
+    <div id="toast"></div>
+  </div>
 </div>
-<div id="status" class="panel"><span id="st">Buscando GPS…</span><br><span id="stats">0 m · 0 🍄</span></div>
-<div id="carChip" class="panel"><svg viewBox="0 0 40 40" id="carArrow"><path d="M20 4 L31 32 L20 25 L9 32 Z" fill="#c8553d" stroke="#fff" stroke-width="2"/></svg><span id="carTxt">🚗 --</span></div>
-<div id="toast"></div>
 <div id="zoneHint"></div>
 
 <div id="bar">
   <button id="bRec">▶ Iniciar salida</button>
-  <button id="bSeta">🍄 Añadir</button>
-  <button id="bFollow" class="on">🎯 Centrar</button>
-  <button id="bMap">🛰 Vista satélite</button>
-  <button id="bMore">☰ Menú</button>
+  <button id="bSeta"><span>🍄</span><small>Añadir seta</small></button>
 </div>
 
 <div id="modal"><div id="sheet">
@@ -257,7 +278,7 @@ function openModal(s, latlng){
 let moving = null;
 $('mMove').onclick = () => {
   moving = {s:editing, draft:{species:$('mSpecies').value, other:$('mOther').value, date:$('mDate').value, note:$('mNote').value, qty:$('mQty').value}};
-  $('modal').classList.remove('show'); setAdd(true); $('bSeta').textContent = 'Toca la nueva posición';
+  $('modal').classList.remove('show'); setAdd(true); $('bSeta').innerHTML = '<span>📍</span><small>Toca el mapa</small>';
 };
 function restoreDraft(d){ $('mSpecies').value = d.species; $('mOther').value = d.other; $('mSpecies').onchange(); $('mDate').value = d.date; $('mNote').value = d.note; $('mQty').value = d.qty; }
 const closeModal = () => { $('modal').classList.remove('show'); editing = pending = null; };
@@ -442,14 +463,14 @@ $('bRec').onclick = () => {
   }
 };
 updRec();
-function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
+function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').innerHTML = v ? '<span>📍</span><small>Toca el mapa</small>' : '<span>🍄</span><small>Añadir seta</small>'; }
 $('bSeta').onclick = () => {
   if (addMode) { setAdd(false); moving = null; return; }
   if (me) { navigator.vibrate && navigator.vibrate(30); openModal(null, shown ? L.latLng(shown) : me.getLatLng()); }
   else { setAdd(true); toast('Sin GPS: toca el mapa donde está la seta'); }
 };
 $('bFollow').onclick = () => { follow = !follow; $('bFollow').classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
-$('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); $('bMap').textContent = satOn ? '🗺 Vista mapa' : '🛰 Vista satélite'; };
+$('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); $('bMap').innerHTML = satOn ? '<span>🗺</span><small>Mapa</small>' : '<span>🛰</span><small>Satélite</small>'; };
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(()=>t.style.display='none', 3000); }
 
 const show = id => $(id).classList.add('show'), hide = id => $(id).classList.remove('show');
