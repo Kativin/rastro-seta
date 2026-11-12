@@ -31,7 +31,7 @@
   #bar button{border:0;border-radius:14px;padding:11px 12px;font-size:14px;font-weight:600;background:var(--crema);color:var(--bosque);box-shadow:0 2px 8px rgba(0,0,0,.3)}
   #bar button.on{background:var(--teja);color:#fff}
   #toast{position:absolute;top:calc(74px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:var(--teja);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none;white-space:nowrap}
-  .arrow{width:34px;height:34px;transition:transform .25s}
+  .arrow{width:34px;height:34px;will-change:transform}
   .seta{position:relative;font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .seta b{position:absolute;right:-6px;top:-6px;background:var(--bosque);color:#fff;font:700 10px system-ui;border-radius:9px;min-width:16px;height:16px;line-height:16px;padding:0 3px}
   /* Modal */
@@ -219,13 +219,32 @@ $('mDel').onclick = () => {
 
 // ---------- Posición, flecha y brújula ----------
 let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
+let shown = null, filt = null, anim = null, lastFixT = 0, targetHeading = null, shownHeading = null;
+function frame(){
+  if (anim && me){
+    const f = Math.min(1, (performance.now() - anim.t0) / anim.dur), e = f*(2-f);
+    shown = {lat: anim.from.lat + (anim.to.lat-anim.from.lat)*e, lng: anim.from.lng + (anim.to.lng-anim.from.lng)*e};
+    me.setLatLng(shown); accCircle.setLatLng(shown);
+    if (follow && !userTouching) map.setView(shown, map.getZoom(), {animate:false});
+    if (f >= 1) anim = null;
+  }
+  if (targetHeading != null){
+    if (shownHeading == null) shownHeading = targetHeading;
+    const d = ((targetHeading - shownHeading + 540) % 360) - 180;   // giro por el camino más corto
+    shownHeading = (shownHeading + d*0.15 + 360) % 360;
+    const svg = $('arrowSvg'); if (svg) svg.style.transform = `rotate(${shownHeading}deg)`;
+  }
+  requestAnimationFrame(frame);
+}
+let userTouching = false;
+requestAnimationFrame(frame);
 let moveHeading = null, compassHeading = null, lastHeadPos = null;
 const arrowHtml = `<svg class="arrow" id="arrowSvg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="rgba(42,125,225,.18)"/><path d="M20 3 L32 33 L20 26 L8 33 Z" fill="#2a7de1" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
 const meIcon = L.divIcon({className:'', html:arrowHtml, iconSize:[34,34], iconAnchor:[17,17]});
 const cardinal = h => ['N','NE','E','SE','S','SO','O','NO'][Math.round(h/45)%8];
 function updateHeading(){
   const h = moveHeading ?? compassHeading;  // caminando: rumbo GPS; parado: brújula
-  const svg = $('arrowSvg'); if (svg && h != null) svg.style.transform = `rotate(${h}deg)`;
+  if (h != null) targetHeading = h;
   if (h != null) {
     $('roseG').style.transform = `rotate(${-h}deg)`;
     $('hdg').textContent = `Rumbo ${Math.round(h)}° ${cardinal(h)}`;
@@ -246,9 +265,15 @@ function onPos(pos){
   if (!me){
     me = L.marker(ll,{icon:meIcon, zIndexOffset:1000, interactive:false}).addTo(map);
     accCircle = L.circle(ll,{radius:acc, color:'#2a7de1', weight:1, fillOpacity:.06, interactive:false}).addTo(map);
-    map.setView(ll, 19);
+    map.setView(ll, 19); shown = {lat, lng}; filt = {lat, lng};
   }
-  me.setLatLng(ll); accCircle.setLatLng(ll).setRadius(acc);
+  accCircle.setRadius(acc);
+  // Suavizado: filtra el temblor del GPS y anima hasta la nueva posición
+  const now = performance.now();
+  const k = Math.min(1, Math.max(.35, 8 / Math.max(acc, 1)));   // más preciso = más peso
+  filt = {lat: filt.lat + (lat - filt.lat)*k, lng: filt.lng + (lng - filt.lng)*k};
+  const dt = lastFixT ? now - lastFixT : 1000; lastFixT = now;
+  anim = {from:{...shown}, to:{...filt}, t0:now, dur:Math.min(1500, Math.max(300, dt*0.95))};
   $('coords').innerHTML = `${fmtLat(lat)}<br>${fmtLng(lng)}<br><small id="hdg">${$('hdg').textContent}</small>`;
   // Rumbo de marcha
   if (heading != null && !isNaN(heading) && speed > 0.4) moveHeading = heading;
@@ -257,7 +282,6 @@ function onPos(pos){
   if (!lastHeadPos) lastHeadPos = ll;
   updateHeading();
   $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'grabando':'pausado'}`;
-  if (follow) map.panTo(ll, {animate:true});
   if (!recording || acc > MAX_ACC) return;
   if (last){
     const d = last.distanceTo(ll);
@@ -301,6 +325,7 @@ lock(); document.addEventListener('visibilitychange', () => { if (document.visib
 
 // ---------- Botones ----------
 map.on('click', e => { if (addMode) openModal(null, e.latlng); });
+map.on('movestart zoomstart', e => {}); map.getContainer().addEventListener('touchstart', () => userTouching = true, {passive:true}); map.getContainer().addEventListener('touchend', () => setTimeout(()=>userTouching=false, 300), {passive:true});
 map.on('dragstart', () => { follow = false; $('bFollow').classList.remove('on'); });
 $('bRec').onclick = () => { recording = !recording; last = null; $('bRec').classList.toggle('on', recording); $('bRec').textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
 function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
