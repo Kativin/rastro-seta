@@ -78,6 +78,16 @@
   .hItem.cur{outline:3px solid var(--bosque)}
   .hItem .hb{display:flex;gap:6px;margin-top:8px}
   .hItem .hb button{flex:1;padding:8px;font-size:13px}
+  .gWarn{font-size:12px;background:#f7dccf;color:#7a2a17;border-radius:10px;padding:8px 10px;margin:0 0 10px}
+  .gCard{display:flex;gap:10px;background:#fff;border-radius:14px;padding:8px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .gImg{width:96px;height:96px;flex:none;border-radius:10px;background:#e9e2d0 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:34px}
+  .gCard h4{margin:0;font-size:15px}
+  .gCard .lat{font-style:italic;font-size:12px;opacity:.75}
+  .gCard p{margin:4px 0 0;font-size:13px;line-height:1.35}
+  .gCard .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-top:4px}
+  .t1{background:#d8efd9;color:#1f6b2c}.t2{background:#fbe3b8;color:#7a4a00}
+  .gCard .alert{font-size:12px;color:#9a3412;margin-top:4px}
+  .gCard .cr{font-size:10px;opacity:.55;margin-top:3px}
   .sheet2 button{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600}
   /* Impresión / PDF */
   @media print{
@@ -162,6 +172,7 @@
     <button class="bOk" id="uCar">🚗 Marcar el coche aquí</button>
     <button class="bOk" id="bPdf">📄 Informe PDF / compartir</button>
     <button class="bOk" id="uZone">🔲 Delimitar zona de rastreo</button>
+    <button class="bOk" id="uGuide">📖 Guía de setas</button>
     <button class="bNo" id="uHist">🗂 Mis salidas</button>
     <div style="display:flex;gap:8px"><button class="bNo" id="uExp" style="flex:1">⬇ Exportar</button><button class="bNo" id="uImp" style="flex:1">⬆ Importar</button></div>
     <button class="bDel" id="uClear">🧹 Borrar rastro de esta salida</button>
@@ -177,6 +188,12 @@
   <h3>🗂 Mis salidas</h3>
   <div id="histList" style="max-height:55vh;overflow:auto"></div>
   <div class="col" style="margin-top:12px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
+</div></div>
+<div id="guideModal" class="mModal"><div class="sheet2" style="max-height:88vh;display:flex;flex-direction:column">
+  <h3>📖 Guía de setas</h3>
+  <p class="gWarn">⚠ Guía orientativa. Nunca comas una seta sin estar 100 % seguro: ante la duda, consúltalo con un micólogo o en una farmacia.</p>
+  <div id="guideList" style="overflow:auto;flex:1"></div>
+  <div class="col" style="margin-top:10px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
 </div></div>
 <div id="pdfModal" class="mModal"><div class="sheet2">
   <h3 id="pdfTitle">📄 Informe de la salida</h3>
@@ -535,6 +552,63 @@ $('uStats').onclick = () => {
     ${sp.length ? '<ul class="spList">' + sp.map(([k,v]) => `<li><span>${esc(k)}</span><b>${v}</b></li>`).join('') + '</ul>' : ''}`;
   show('statsModal');
 };
+
+// --- Guía de setas ---
+const GUIDE = [
+  {sp:SPECIES[0], wiki:'Boletus_edulis', name:'Andoa / boleto', when:'Sep – nov', where:'Robledales, castañares, pinares y hayedos',
+   d:'Sombrero marrón de 8 a 25 cm, carnoso, con el borde algo más claro. Debajo tiene tubos (como una esponja) blancos que pasan a amarillo verdoso con la edad. Pie grueso y barrigudo con una redecilla blanca en la parte alta. Carne blanca que no cambia de color al cortarla.',
+   a:'No confundir con Boletus satanas (pie rojo) ni con Tylopilus felleus (muy amargo, tubos rosados).', ok:true},
+  {sp:SPECIES[1], wiki:'Boletus_aereus', name:'Boleto negro', when:'Ago – oct', where:'Robles, castaños y alcornoques, zonas soleadas',
+   d:'Sombrero marrón muy oscuro, casi negro, de aspecto aterciopelado. Tubos blancos que amarillean. Pie robusto marrón con redecilla. Carne blanca, compacta y muy aromática: uno de los boletos más valorados.',
+   a:'Revisa siempre que la carne no azulee al cortarla.', ok:true},
+  {sp:SPECIES[2], wiki:'Boletus_pinophilus', name:'Boleto de pino', when:'May – jun y sep – nov', where:'Pinares, también en castañares',
+   d:'Sombrero rojizo o castaño granate, a veces con aspecto escarchado. Tubos blancos que pasan a amarillo oliva. Pie grueso, blanquecino o rojizo, con redecilla. Carne blanca y firme con olor agradable.',
+   a:'Mismos parecidos peligrosos que la andoa; descarta ejemplares con poros rojos.', ok:true},
+  {sp:SPECIES[3], wiki:'Cantharellus_cibarius', name:'Rebozuelo / cantarela', when:'Jun – nov', where:'Robledales, pinares y hayedos, entre musgo',
+   d:'Toda la seta es de color amarillo yema. Sombrero en forma de embudo con el borde ondulado. Por debajo no tiene láminas de verdad sino pliegues gruesos que bajan por el pie. Olor afrutado, como a albaricoque.',
+   a:'No confundir con Omphalotus olearius (tóxica, naranja, láminas verdaderas, crece en grupos sobre tocones) ni con Hygrophoropsis aurantiaca.', ok:true},
+  {sp:SPECIES[4], wiki:'Macrolepiota_procera', name:'Parasol / zarrota', when:'Ago – nov', where:'Prados, claros y bordes de bosque y caminos',
+   d:'Seta muy grande: sombrero de 15 a 35 cm con escamas marrones sobre fondo claro y un pezón central. Pie alto y delgado con dibujo atigrado y un anillo doble que se puede deslizar arriba y abajo.',
+   a:'Peligro: las lepiotas pequeñas (menos de 10 cm) son mortales. Recoge solo ejemplares grandes y con anillo móvil.', ok:true},
+  {sp:SPECIES[5], wiki:'Lactarius_deliciosus', name:'Níscalo', when:'Sep – dic', where:'Pinares',
+   d:'Sombrero anaranjado con círculos concéntricos más oscuros, algo hundido en el centro. Láminas anaranjadas. Al cortarla suelta un líquido (látex) naranja zanahoria que con el tiempo se vuelve verde. Las manchas verdosas son normales.',
+   a:'Si el látex es blanco, no es un níscalo (puede ser Lactarius torminosus, tóxico).', ok:true},
+  {sp:SPECIES[6], wiki:'Amanita_caesarea', name:'Amanita de los Césares', when:'Jul – oct', where:'Castañares, robledales y alcornocales cálidos',
+   d:'Sombrero naranja rojizo intenso, liso. Láminas, anillo y pie de color amarillo. La base del pie sale de una volva blanca grande, como una cáscara de huevo. De joven parece un huevo blanco del que asoma el naranja.',
+   a:'Mucho cuidado: se puede confundir con Amanita muscaria (roja con motas blancas y láminas blancas, tóxica). Si las láminas no son amarillas, descártala.', ok:true},
+  {sp:SPECIES[7], wiki:'Clitocybe_nuda', name:'Pie azul', when:'Oct – dic', where:'Hojarasca de bosques, setos, jardines y pinares',
+   d:'Sombrero violeta azulado que con la edad se vuelve marrón violáceo. Láminas lilas. Pie violeta, algo engrosado en la base. Olor afrutado. Debe comerse siempre bien cocinada.',
+   a:'Se parece a algunos Cortinarius tóxicos (tienen una telilla como de tela de araña bajo el sombrero de jóvenes y esporas marrón óxido).', ok:true},
+  {sp:SPECIES[8], wiki:'Hydnum_repandum', name:'Lengua de vaca', when:'Sep – dic', where:'Bosques de frondosas y coníferas',
+   d:'Sombrero de color crema anaranjado, irregular. Lo más llamativo: por debajo no tiene láminas ni tubos, sino pequeños aguijones como púas. Carne blanca y quebradiza. Fácil de reconocer.',
+   a:'Pocas confusiones peligrosas; los ejemplares viejos amargan.', ok:true},
+  {sp:SPECIES[9], wiki:'Craterellus_cornucopioides', name:'Trompeta de los muertos', when:'Sep – nov', where:'Hayedos, robledales y castañares húmedos',
+   d:'Forma de trompeta o embudo hueco, de color gris oscuro a negro. La parte de fuera es lisa o algo arrugada y más clara. Carne fina y elástica. Muy aromática; se seca muy bien.',
+   a:'Difícil de ver entre la hojarasca, pero apenas tiene parecidos peligrosos.', ok:true}
+];
+let guideLoaded = false;
+function renderGuide(){
+  $('guideList').innerHTML = GUIDE.map((g,i) => `<div class="gCard">
+    <div class="gImg" id="gi${i}">🍄</div>
+    <div><h4>${g.name}</h4><div class="lat">${g.sp.split(' (')[0]}</div>
+      <span class="tag t1">📅 ${g.when}</span> <span class="tag t2">🌲 ${g.where}</span>
+      <p>${g.d}</p><div class="alert">⚠ ${g.a}</div><div class="cr" id="gc${i}"></div></div></div>`).join('');
+  if (guideLoaded) return; guideLoaded = true;
+  GUIDE.forEach((g,i) => {
+    const tryWiki = lang => fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${g.wiki}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    tryWiki('es').then(j => (j && j.thumbnail) ? j : tryWiki('en')).then(j => {
+      if (!j || !j.thumbnail) return;
+      g.img = j.thumbnail.source; g.link = j.content_urls && j.content_urls.mobile.page;
+      paintGuideImg(i);
+    });
+  });
+}
+function paintGuideImg(i){
+  const g = GUIDE[i], el = $('gi'+i); if (!el || !g.img) return;
+  el.style.backgroundImage = `url("${g.img}")`; el.textContent = '';
+  $('gc'+i).innerHTML = `Imagen: <a href="${g.link}" target="_blank" rel="noopener">Wikipedia / Wikimedia Commons</a>`;
+}
+$('uGuide').onclick = () => { hide('menuModal'); renderGuide(); GUIDE.forEach((g,i) => paintGuideImg(i)); show('guideModal'); };
 
 // --- Salidas ---
 function loadSession(ss){
