@@ -20,6 +20,9 @@
   #map{position:fixed;inset:0}
   .trail-pane{opacity:.45}
   .panel{background:rgba(244,239,227,.95);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+  #rotate{display:none;position:fixed;inset:0;z-index:5000;background:var(--bosque);color:var(--crema);align-items:center;justify-content:center;text-align:center;font:700 22px/1.6 system-ui}
+  #rotate div{font-size:22px}
+  @media (orientation:landscape) and (max-height:520px){ #rotate{display:flex} }
   #top{position:fixed;top:0;left:0;right:0;z-index:1000;pointer-events:none}
   #top > *{pointer-events:auto}
   #hdr{background:var(--bosque);color:var(--crema);display:flex;align-items:center;justify-content:space-between;gap:8px;
@@ -148,6 +151,7 @@
   </div>
 </div>
 <div id="zoneHint"></div>
+<div id="rotate"><div>📱↻<br>Gira el móvil en vertical</div></div>
 
 <div id="bar">
   <button id="bRec">▶ Iniciar salida</button>
@@ -408,6 +412,8 @@ function onPos(pos){
   if (!lastHeadPos) lastHeadPos = ll;
   updateHeading();
   $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'⏺ grabando':'sin salida activa'}`;
+  if (recording && acc <= MAX_ACC && needGap) handleGap(ll);
+  if (recording) updNotif();
   if (recording && acc <= MAX_ACC) {
     const now = Date.now();
     if (statPos) { const d = statPos.distanceTo(ll); if (d >= Math.max(2, acc/4)) { data.dist += d; statPos = ll; } } else statPos = ll;
@@ -461,6 +467,39 @@ $('compass').onclick = enableCompass; // iOS pide permiso al tocar
 document.addEventListener('touchend', function once(){ enableCompass(); document.removeEventListener('touchend', once); }, {once:true});
 
 // Pantalla encendida
+// ---------- Vertical ----------
+try { screen.orientation && screen.orientation.lock && screen.orientation.lock('portrait').catch(()=>{}); } catch(e){}
+
+// ---------- Notificación de salida en curso ----------
+function askNotif(){ try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){} }
+async function updNotif(force){
+  if (!recording || !('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
+  const now = Date.now(); if (!force && now - (updNotif.t||0) < 20000) return; updNotif.t = now;
+  try { const reg = await navigator.serviceWorker.ready; const st = statsOf(data);
+    reg.showNotification('🍄 Rastro Seta · salida en curso', {tag:'salida', renotify:false, silent:true, requireInteraction:true,
+      body:`${fmtDist(st.dist)} · ${fmtDur(st.total)} · ${st.units} setas${data.car && shown ? ` · 🚗 a ${fmtDist(L.latLng(shown).distanceTo([data.car.lat,data.car.lng]))}` : ''}`,
+      icon:'icons/icon-192.png', badge:'icons/icon-192.png', data:{url:location.href}}); } catch(e){}
+}
+async function closeNotif(){ try { const reg = await navigator.serviceWorker.ready; (await reg.getNotifications({tag:'salida'})).forEach(n => n.close()); } catch(e){} }
+
+// ---------- Tramos sin registrar (pantalla bloqueada) ----------
+const gapLayer = L.layerGroup().addTo(map);
+const drawGap = g => L.polyline(g, {color:'#555', weight:3, dashArray:'4 8', opacity:.8, interactive:false}).addTo(gapLayer);
+(data.gaps||[]).forEach(drawGap);
+let hiddenAt = null, gapFrom = null;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { if (recording) { hiddenAt = Date.now(); gapFrom = last || statPos; updNotif(true); } }
+  else if (recording && hiddenAt && Date.now() - hiddenAt > 15000) { needGap = true; }
+});
+let needGap = false;
+function handleGap(ll){
+  needGap = false; hiddenAt = null;
+  if (!gapFrom) return; const d = gapFrom.distanceTo(ll);
+  if (d > 10 && d < 5000) { const g = [[gapFrom.lat, gapFrom.lng], [ll.lat, ll.lng]]; (data.gaps = data.gaps || []).push(g); drawGap(g);
+    data.dist += d; toast(`Tramo sin registrar: ${fmtDist(d)} (pantalla bloqueada)`); }
+  last = ll; statPos = ll; gapFrom = null;
+}
+
 async function lock(){ try { await navigator.wakeLock.request('screen'); } catch(e){} }
 lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible') lock(); });
 
@@ -486,11 +525,11 @@ $('bRec').onclick = () => {
     }
     data.start = Date.now(); data.active = true; data.end = null; recording = true; last = null; statPos = null; prevFix = null; baseAlt = null;
     follow = true; $('bFollow').classList.add('on'); if (me) map.setView(me.getLatLng(), Math.max(map.getZoom(), 18));
-    persist(); updRec(); toast('▶ Salida iniciada'); navigator.vibrate && navigator.vibrate(60);
+    persist(); updRec(); askNotif(); updNotif(true); toast('▶ Salida iniciada'); navigator.vibrate && navigator.vibrate(60);
   } else {
     if (!confirm('¿Finalizar la salida?')) return;
     recording = false; data.active = false; data.end = Date.now(); data.lastT = data.lastT || data.end; persist(); updRec();
-    openReport(true);
+    closeNotif(); openReport(true);
   }
 };
 updRec();
@@ -670,7 +709,7 @@ function loadSession(ss){
   data.setas.forEach(x => { if (x._m) { map.removeLayer(x._m); delete x._m; } });
   trailLayer.clearLayers();
   data = ss; store.current = ss.id; recording = !!ss.active; updRec && updRec(); drawZone && drawZone(); last = null; statPos = null; prevFix = null; baseAlt = null;
-  data.trail.forEach(drawPoint); refreshSetaMarkers(); drawCar(); persist();
+  data.trail.forEach(drawPoint); gapLayer.clearLayers(); (data.gaps||[]).forEach(drawGap); refreshSetaMarkers(); drawCar(); persist();
   const pts = data.trail.map(p=>L.latLng(p)).concat(data.setas.map(x=>L.latLng(x.lat,x.lng)));
   if (pts.length) { follow = false; $('bFollow').classList.remove('on'); map.fitBounds(L.latLngBounds(pts), {padding:[60,60], maxZoom:19}); }
 }

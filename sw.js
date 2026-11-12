@@ -1,5 +1,5 @@
 // Sube este número en cada nueva versión (o cambia cualquier archivo): los móviles se actualizan solos.
-const VERSION = 'rastro-seta-v13';
+const VERSION = 'rastro-seta-v14';
 const APP = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'];
 const TILES = 'rastro-seta-tiles-cors';
@@ -25,4 +25,13 @@ self.addEventListener('fetch', e => {
     if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req, {ignoreSearch: true})));
+});
+
+// Tocar la notificación de "salida en curso" vuelve a la app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type:'window', includeUncontrolled:true}).then(cs => {
+    for (const c of cs) if ('focus' in c) return c.focus();
+    return self.clients.openWindow('./');
+  }));
 });
