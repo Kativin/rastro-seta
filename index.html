@@ -22,7 +22,6 @@
   .panel{background:rgba(244,239,227,.95);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
   #compass{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:1000;display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px}
   #rose{width:46px;height:46px;flex:none}
-  #rose g{transition:transform .3s}
   #coords{font:600 12px/1.35 ui-monospace,Menlo,monospace}
   #coords small{font:500 11px system-ui;opacity:.7}
   #status{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:1000;padding:6px 10px;font-size:12px;text-align:right;line-height:1.4}
@@ -236,7 +235,16 @@ function frame(){
   }
   requestAnimationFrame(frame);
 }
-let userTouching = false;
+let userTouching = false, targetRose = null, shownRose = null;
+(function roseFrame(){
+  if (targetRose != null){
+    if (shownRose == null) shownRose = targetRose;
+    const d = ((targetRose - shownRose + 540) % 360) - 180;
+    shownRose = (shownRose + d*0.2 + 360) % 360;
+    $('roseG').setAttribute('transform', `rotate(${-shownRose})`);
+  }
+  requestAnimationFrame(roseFrame);
+})();
 requestAnimationFrame(frame);
 let moveHeading = null, compassHeading = null, lastHeadPos = null;
 const arrowHtml = `<svg class="arrow" id="arrowSvg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="rgba(42,125,225,.18)"/><path d="M20 3 L32 33 L20 26 L8 33 Z" fill="#2a7de1" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
@@ -245,8 +253,9 @@ const cardinal = h => ['N','NE','E','SE','S','SO','O','NO'][Math.round(h/45)%8];
 function updateHeading(){
   const h = moveHeading ?? compassHeading;  // caminando: rumbo GPS; parado: brújula
   if (h != null) targetHeading = h;
+  const dev = compassHeading ?? moveHeading;   // la aguja usa la orientación real del móvil
+  if (dev != null) targetRose = dev;
   if (h != null) {
-    $('roseG').style.transform = `rotate(${-h}deg)`;
     $('hdg').textContent = `Rumbo ${Math.round(h)}° ${cardinal(h)}`;
   }
 }
