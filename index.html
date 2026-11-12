@@ -88,6 +88,17 @@
   .t1{background:#d8efd9;color:#1f6b2c}.t2{background:#fbe3b8;color:#7a4a00}
   .gCard .alert{font-size:12px;color:#9a3412;margin-top:4px}
   .gCard .cr{font-size:10px;opacity:.55;margin-top:3px}
+  .gImg{cursor:zoom-in;position:relative}
+  .gImg.has::after{content:'🔍';position:absolute;right:3px;bottom:3px;font-size:13px;background:rgba(255,255,255,.85);border-radius:6px;padding:1px 3px}
+  #lightbox{position:fixed;inset:0;z-index:3000;background:#000;display:none;flex-direction:column}
+  #lightbox.show{display:flex}
+  #lbScroll{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch}
+  #lbImg{width:100%;height:auto;max-height:100%;object-fit:contain;transition:width .2s}
+  #lightbox.zoom #lbScroll{display:block}
+  #lightbox.zoom #lbImg{width:260%;max-height:none}
+  #lbCap{color:#fff;font-size:14px;text-align:center;padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
+  #lbCap small{opacity:.7}
+  #lbClose{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:22px;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:20px}
   .sheet2 button{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600}
   /* Impresión / PDF */
   @media print{
@@ -195,6 +206,7 @@
   <div id="guideList" style="overflow:auto;flex:1"></div>
   <div class="col" style="margin-top:10px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
 </div></div>
+<div id="lightbox"><div id="lbScroll"><img id="lbImg" alt=""></div><div id="lbCap"></div><button id="lbClose">✕</button></div>
 <div id="pdfModal" class="mModal"><div class="sheet2">
   <h3 id="pdfTitle">📄 Informe de la salida</h3>
   <p id="pdfMsg"></p>
@@ -598,16 +610,29 @@ function renderGuide(){
     const tryWiki = lang => fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${g.wiki}`).then(r => r.ok ? r.json() : null).catch(() => null);
     tryWiki('es').then(j => (j && j.thumbnail) ? j : tryWiki('en')).then(j => {
       if (!j || !j.thumbnail) return;
-      g.img = j.thumbnail.source; g.link = j.content_urls && j.content_urls.mobile.page;
+      g.img = j.thumbnail.source; g.big = (j.originalimage && j.originalimage.source) || j.thumbnail.source; g.link = j.content_urls && j.content_urls.mobile.page;
       paintGuideImg(i);
     });
   });
 }
 function paintGuideImg(i){
   const g = GUIDE[i], el = $('gi'+i); if (!el || !g.img) return;
-  el.style.backgroundImage = `url("${g.img}")`; el.textContent = '';
+  el.style.backgroundImage = `url("${g.img}")`; el.textContent = ''; el.classList.add('has');
+  el.onclick = () => openLightbox(i);
   $('gc'+i).innerHTML = `Imagen: <a href="${g.link}" target="_blank" rel="noopener">Wikipedia / Wikimedia Commons</a>`;
 }
+function openLightbox(i){
+  const g = GUIDE[i]; const lb = $('lightbox'); lb.classList.remove('zoom');
+  $('lbImg').src = g.img; const big = new Image(); big.onload = () => { if ($('lbImg').dataset.i == i) $('lbImg').src = g.big; }; big.src = g.big;
+  $('lbImg').dataset.i = i;
+  $('lbCap').innerHTML = `<b>${g.name}</b> · <i>${g.sp.split(' (')[0]}</i><br><small>Toca la foto para ampliar · Imagen: Wikipedia / Wikimedia Commons</small>`;
+  lb.classList.add('show');
+}
+$('lbImg').onclick = e => { const lb = $('lightbox'), sc = $('lbScroll'), r = $('lbImg').getBoundingClientRect();
+  const fx = (e.clientX - r.left)/r.width, fy = (e.clientY - r.top)/r.height;
+  lb.classList.toggle('zoom');
+  if (lb.classList.contains('zoom')) requestAnimationFrame(() => { sc.scrollLeft = sc.scrollWidth*fx - sc.clientWidth/2; sc.scrollTop = sc.scrollHeight*fy - sc.clientHeight/2; }); };
+$('lbClose').onclick = () => $('lightbox').classList.remove('show');
 $('uGuide').onclick = () => { hide('menuModal'); renderGuide(); GUIDE.forEach((g,i) => paintGuideImg(i)); show('guideModal'); };
 
 // --- Salidas ---
