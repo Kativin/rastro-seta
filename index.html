@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Rastro Seta</title>
 <meta name="theme-color" content="#2b3a2c">
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,144 +15,328 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#1d2a1f}
+  :root{--crema:#f4efe3;--bosque:#2b3a2c;--teja:#c8553d;--ocre:#e8a33d}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#1d2a1f;color:var(--bosque)}
   #map{position:absolute;inset:0}
   .trail-pane{opacity:.45}
-  #bar{position:absolute;left:0;right:0;bottom:0;z-index:1000;display:flex;gap:8px;justify-content:center;
-       padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}
-  #bar button{border:0;border-radius:14px;padding:12px 14px;font-size:15px;font-weight:600;background:#f4efe3;color:#2b3a2c;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-  #bar button.on{background:#c8553d;color:#fff}
-  #info{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:1000;
-        background:rgba(244,239,227,.94);color:#2b3a2c;border-radius:12px;padding:8px 12px;font-size:13px;
-        display:flex;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-  .seta{font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
-  #upd{position:absolute;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:#c8553d;color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none}
-  .me{width:16px;height:16px;border-radius:50%;background:#2a7de1;border:3px solid #fff;box-shadow:0 0 0 2px rgba(42,125,225,.4)}
+  .panel{background:rgba(244,239,227,.95);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+  #compass{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:1000;display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px}
+  #rose{width:46px;height:46px;flex:none}
+  #rose g{transition:transform .3s}
+  #coords{font:600 12px/1.35 ui-monospace,Menlo,monospace}
+  #coords small{font:500 11px system-ui;opacity:.7}
+  #status{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:1000;padding:6px 10px;font-size:12px;text-align:right;line-height:1.4}
+  #bar{position:absolute;left:0;right:0;bottom:0;z-index:1000;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;
+       padding:10px 8px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}
+  #bar button{border:0;border-radius:14px;padding:11px 12px;font-size:14px;font-weight:600;background:var(--crema);color:var(--bosque);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  #bar button.on{background:var(--teja);color:#fff}
+  #toast{position:absolute;top:calc(74px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:var(--teja);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none;white-space:nowrap}
+  .arrow{width:34px;height:34px;transition:transform .25s}
+  .seta{position:relative;font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+  .seta b{position:absolute;right:-6px;top:-6px;background:var(--bosque);color:#fff;font:700 10px system-ui;border-radius:9px;min-width:16px;height:16px;line-height:16px;padding:0 3px}
+  /* Modal */
+  #modal{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center}
+  #modal.show{display:flex}
+  #sheet{background:var(--crema);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box}
+  #sheet h3{margin:0 0 12px;font-size:18px}
+  #sheet label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+  #sheet select,#sheet input,#sheet textarea{width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1px solid #c9bfa8;border-radius:10px;background:#fff;color:var(--bosque);font-family:inherit}
+  #sheet .meta{font-size:13px;background:#e9e2d0;border-radius:10px;padding:8px 10px;margin-top:4px;line-height:1.5}
+  #sheet .row{display:flex;gap:8px;margin-top:16px}
+  #sheet .row button{flex:1;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:600}
+  .bOk{background:var(--bosque);color:#fff}.bDel{background:var(--teja);color:#fff}.bNo{background:#ddd3bd;color:var(--bosque)}
+  #report{display:none}
+  /* Impresión / PDF */
+  @media print{
+    @page{size:A4;margin:12mm}
+    body{background:#fff}
+    #bar,#status,#toast,#modal,.leaflet-control-container{display:none!important}
+    #compass{display:none!important}
+    #map{position:relative!important;width:100%!important;height:120mm!important;border:1px solid #999;page-break-inside:avoid}
+    #report{display:block;font-size:11pt}
+    #report h1{font-size:18pt;margin:0 0 4mm}
+    #report table{width:100%;border-collapse:collapse;margin-top:4mm}
+    #report th,#report td{border:1px solid #bbb;padding:2mm;text-align:left;vertical-align:top}
+    #report th{background:#eee}
+    #report tr{page-break-inside:avoid}
+    .trail-pane{opacity:.45}
+  }
 </style>
 </head>
 <body>
+<div id="report"></div>
 <div id="map"></div>
-<div id="info"><span id="st">Buscando GPS…</span><span id="stats">0 m · 0 🍄</span></div>
-<div id="upd">Nueva versión instalada ✓</div>
+
+<div id="compass" class="panel">
+  <svg id="rose" viewBox="-50 -50 100 100">
+    <circle r="47" fill="#fff" stroke="#2b3a2c" stroke-width="3"/>
+    <g id="roseG">
+      <polygon points="0,-40 9,0 -9,0" fill="#c8553d"/>
+      <polygon points="0,40 9,0 -9,0" fill="#2b3a2c"/>
+    </g>
+  </svg>
+  <div id="coords">--.-----° N<br>--.-----° O<br><small id="hdg">Rumbo --</small></div>
+</div>
+<div id="status" class="panel"><span id="st">Buscando GPS…</span><br><span id="stats">0 m² · 0 🍄</span></div>
+<div id="toast"></div>
+
 <div id="bar">
   <button id="bRec" class="on">⏸ Pausar</button>
   <button id="bSeta">🍄 Añadir</button>
   <button id="bFollow" class="on">🎯 Seguir</button>
   <button id="bMap">🛰 Capa</button>
+  <button id="bPdf">📄 PDF</button>
   <button id="bMore">⋯</button>
 </div>
+
+<div id="modal"><div id="sheet">
+  <h3 id="mTitle">Nueva seta</h3>
+  <label for="mSpecies">Especie</label>
+  <select id="mSpecies"></select>
+  <div id="otherWrap" style="display:none">
+    <label for="mOther">Nombre de la seta</label>
+    <input id="mOther" placeholder="Escribe la especie">
+  </div>
+  <label for="mDate">Fecha y hora de recogida</label>
+  <input id="mDate" type="datetime-local">
+  <label for="mNote">Notas (opcional)</label>
+  <input id="mNote" placeholder="Cantidad, estado, árbol cercano…">
+  <label>Ubicación</label>
+  <div class="meta" id="mLoc"></div>
+  <div class="row">
+    <button class="bDel" id="mDel">Borrar</button>
+    <button class="bNo" id="mCancel">Cancelar</button>
+    <button class="bOk" id="mSave">Guardar</button>
+  </div>
+</div></div>
+
 <script>
-const RADIUS = 1.5;           // metros (3 m de diámetro)
-const MIN_STEP = 0.75;        // distancia mínima entre puntos guardados
-const MAX_ACC = 25;           // descarta lecturas GPS con precisión peor que esto (m)
-const KEY = 'buscasetas_v1';
+const RADIUS = 1.5, MIN_STEP = 0.75, MAX_ACC = 25, KEY = 'buscasetas_v1';
+const SPECIES = [
+  'Boletus edulis (andoa, boleto)',
+  'Boletus aereus (boleto negro)',
+  'Boletus pinophilus (boleto de pino)',
+  'Cantharellus cibarius (rebozuelo, cantarela)',
+  'Macrolepiota procera (parasol, zarrota)',
+  'Lactarius deliciosus (níscalo)',
+  'Amanita caesarea (amanita de los Césares)',
+  'Lepista nuda (pie azul)',
+  'Hydnum repandum (lengua de vaca)',
+  'Craterellus cornucopioides (trompeta de los muertos)'
+];
+const $ = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let data = {trail:[], setas:[]};
 try { const s = localStorage.getItem(KEY); if (s) data = JSON.parse(s); } catch(e){}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} };
+data.setas.forEach(s => { if (!s.species && s.note !== undefined) { s.species = s.note || 'Sin especificar'; s.note = ''; } });
+const persist = () => {
+  try { localStorage.setItem(KEY, JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})); } catch(e){}
+  $('stats').textContent = `~${Math.round(data.trail.length * MIN_STEP * RADIUS * 2)} m² · ${data.setas.length} 🍄`;
+};
 
-const map = L.map('map', {zoomControl:false, maxZoom:21}).setView([42.24,-8.72], 17);
-const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap'});
-const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'© Esri'});
+// ---------- Mapa ----------
+const map = L.map('map', {zoomControl:false, maxZoom:21}).setView([42.6,-8.1], 9);
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap',crossOrigin:true});
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'© Esri',crossOrigin:true});
 osm.addTo(map); let satOn = false;
 
 map.createPane('trail'); map.getPane('trail').classList.add('trail-pane'); map.getPane('trail').style.zIndex = 390;
 const trailRenderer = L.canvas({pane:'trail', padding:0.5});
-const trailStyle = {renderer:trailRenderer, pane:'trail', stroke:false, fillColor:'#e8a33d', fillOpacity:1, interactive:false};
-const drawPoint = p => L.circle(p, Object.assign({radius:RADIUS}, trailStyle)).addTo(map);
+const trailLayer = L.layerGroup().addTo(map);
+const drawPoint = p => L.circle(p, {radius:RADIUS, renderer:trailRenderer, pane:'trail', stroke:false, fillColor:'#e8a33d', fillOpacity:1, interactive:false}).addTo(trailLayer);
 data.trail.forEach(drawPoint);
 
-const setaIcon = L.divIcon({className:'', html:'<div class="seta">🍄</div>', iconSize:[28,28], iconAnchor:[14,24]});
-function addSetaMarker(s){
-  const m = L.marker([s.lat,s.lng], {icon:setaIcon}).addTo(map);
-  const d = new Date(s.t);
-  m.bindPopup(`<b>${s.note ? s.note.replace(/</g,'&lt;') : 'Setas'}</b><br>${d.toLocaleString('es-ES')}<br><a href="#" data-del="${s.t}">Borrar</a>`);
-  s._m = m;
+// ---------- Setas ----------
+const fmtDate = t => new Date(t).toLocaleString('es-ES', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const fmtLat = v => `${Math.abs(v).toFixed(5)}° ${v>=0?'N':'S'}`;
+const fmtLng = v => `${Math.abs(v).toFixed(5)}° ${v>=0?'E':'O'}`;
+const setaIcon = n => L.divIcon({className:'', html:`<div class="seta">🍄<b>${n}</b></div>`, iconSize:[28,28], iconAnchor:[14,24]});
+function refreshSetaMarkers(){
+  data.setas.sort((a,b)=>a.t-b.t);
+  data.setas.forEach((s,i) => {
+    if (!s._m) { s._m = L.marker([s.lat,s.lng]).addTo(map); s._m.on('click', () => openModal(s)); }
+    s._m.setIcon(setaIcon(i+1));
+  });
 }
-data.setas.forEach(addSetaMarker);
-map.on('popupopen', e => {
-  const a = e.popup.getElement().querySelector('[data-del]');
-  if (a) a.onclick = ev => { ev.preventDefault();
-    const t = +a.dataset.del; const i = data.setas.findIndex(s=>s.t===t);
-    if (i>=0){ map.removeLayer(data.setas[i]._m); data.setas.splice(i,1); persist(); } };
+refreshSetaMarkers(); persist();
+
+SPECIES.concat(['Otra (escribir)…']).forEach((n,i) => {
+  const o = document.createElement('option'); o.value = i < SPECIES.length ? n : '__other'; o.textContent = n; $('mSpecies').appendChild(o);
 });
-const persist = () => { data.setas.forEach(s=>{});
-  try { localStorage.setItem(KEY, JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})); } catch(e){}
-  updStats(); };
+$('mSpecies').onchange = () => { $('otherWrap').style.display = $('mSpecies').value === '__other' ? 'block' : 'none'; };
+const toLocalInput = t => { const d = new Date(t); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
 
-let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
-const meIcon = L.divIcon({className:'', html:'<div class="me"></div>', iconSize:[22,22], iconAnchor:[11,11]});
-
-function updStats(){
-  const m = Math.round(data.trail.length * MIN_STEP * 3); // aprox. m² no; mostramos área aprox
-  const area = Math.round(data.trail.length * MIN_STEP * RADIUS * 2);
-  document.getElementById('stats').textContent = `~${area} m² · ${data.setas.length} 🍄`;
+let editing = null, pending = null;
+function openModal(s, latlng){
+  editing = s || null; pending = latlng || null;
+  const lat = s ? s.lat : latlng.lat, lng = s ? s.lng : latlng.lng, t = s ? s.t : Date.now();
+  $('mTitle').textContent = s ? `Seta nº ${data.setas.indexOf(s)+1}` : 'Nueva seta';
+  const sp = s ? s.species : SPECIES[0];
+  if (SPECIES.includes(sp)) { $('mSpecies').value = sp; $('mOther').value = ''; }
+  else { $('mSpecies').value = '__other'; $('mOther').value = sp || ''; }
+  $('mSpecies').onchange();
+  $('mDate').value = toLocalInput(t);
+  $('mNote').value = s ? (s.note||'') : '';
+  $('mLoc').innerHTML = `${fmtLat(lat)} · ${fmtLng(lng)}<br>${s ? 'Recogida el ' + fmtDate(s.t) : 'Ahora: ' + fmtDate(t)}`;
+  $('mDel').style.display = s ? 'block' : 'none';
+  $('modal').classList.add('show');
 }
-updStats();
+const closeModal = () => { $('modal').classList.remove('show'); editing = pending = null; };
+$('mCancel').onclick = closeModal;
+$('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+$('mSave').onclick = () => {
+  let species = $('mSpecies').value === '__other' ? $('mOther').value.trim() : $('mSpecies').value;
+  if (!species) { $('mOther').focus(); return; }
+  const t = $('mDate').value ? new Date($('mDate').value).getTime() : Date.now();
+  if (editing) Object.assign(editing, {species, t, note:$('mNote').value.trim()});
+  else data.setas.push({lat:+pending.lat.toFixed(7), lng:+pending.lng.toFixed(7), t, species, note:$('mNote').value.trim()});
+  refreshSetaMarkers(); persist(); closeModal(); setAdd(false);
+};
+$('mDel').onclick = () => {
+  if (!editing || !confirm('¿Borrar esta seta?')) return;
+  map.removeLayer(editing._m); data.setas.splice(data.setas.indexOf(editing),1);
+  refreshSetaMarkers(); persist(); closeModal();
+};
+
+// ---------- Posición, flecha y brújula ----------
+let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
+let moveHeading = null, compassHeading = null, lastHeadPos = null;
+const arrowHtml = `<svg class="arrow" id="arrowSvg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="rgba(42,125,225,.18)"/><path d="M20 3 L32 33 L20 26 L8 33 Z" fill="#2a7de1" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+const meIcon = L.divIcon({className:'', html:arrowHtml, iconSize:[34,34], iconAnchor:[17,17]});
+const cardinal = h => ['N','NE','E','SE','S','SO','O','NO'][Math.round(h/45)%8];
+function updateHeading(){
+  const h = moveHeading ?? compassHeading;  // caminando: rumbo GPS; parado: brújula
+  const svg = $('arrowSvg'); if (svg && h != null) svg.style.transform = `rotate(${h}deg)`;
+  if (h != null) {
+    $('roseG').style.transform = `rotate(${-h}deg)`;
+    $('hdg').textContent = `Rumbo ${Math.round(h)}° ${cardinal(h)}`;
+  }
+}
+// Las letras N de la rosa giran con ella
+$('roseG').insertAdjacentHTML('beforeend','<text y="-28" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" style="paint-order:stroke" stroke="#c8553d" stroke-width="0">N</text>');
+
+function bearing(a, b){
+  const r = Math.PI/180, y = Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),
+        x = Math.cos(a.lat*r)*Math.sin(b.lat*r) - Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r);
+  return (Math.atan2(y,x)/r + 360) % 360;
+}
 
 function onPos(pos){
-  const {latitude:lat, longitude:lng, accuracy:acc} = pos.coords;
+  const {latitude:lat, longitude:lng, accuracy:acc, heading, speed} = pos.coords;
   const ll = L.latLng(lat,lng);
-  if (!me){ me = L.marker(ll,{icon:meIcon, zIndexOffset:1000}).addTo(map);
-            accCircle = L.circle(ll,{radius:acc, color:'#2a7de1', weight:1, fillOpacity:.08, interactive:false}).addTo(map);
-            map.setView(ll, 19); }
+  if (!me){
+    me = L.marker(ll,{icon:meIcon, zIndexOffset:1000, interactive:false}).addTo(map);
+    accCircle = L.circle(ll,{radius:acc, color:'#2a7de1', weight:1, fillOpacity:.06, interactive:false}).addTo(map);
+    map.setView(ll, 19);
+  }
   me.setLatLng(ll); accCircle.setLatLng(ll).setRadius(acc);
-  document.getElementById('st').textContent = acc > MAX_ACC ? `GPS impreciso (±${Math.round(acc)} m)` : `GPS ±${Math.round(acc)} m${recording?' · grabando':' · pausado'}`;
+  $('coords').innerHTML = `${fmtLat(lat)}<br>${fmtLng(lng)}<br><small id="hdg">${$('hdg').textContent}</small>`;
+  // Rumbo de marcha
+  if (heading != null && !isNaN(heading) && speed > 0.4) moveHeading = heading;
+  else if (lastHeadPos && lastHeadPos.distanceTo(ll) > Math.max(3, acc/2)) { moveHeading = bearing(lastHeadPos, ll); lastHeadPos = ll; }
+  else if (speed != null && speed < 0.2) moveHeading = null;
+  if (!lastHeadPos) lastHeadPos = ll;
+  updateHeading();
+  $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'grabando':'pausado'}`;
   if (follow) map.panTo(ll, {animate:true});
   if (!recording || acc > MAX_ACC) return;
   if (last){
     const d = last.distanceTo(ll);
     if (d < MIN_STEP) return;
-    // rellenar huecos si hubo salto pequeño, para que el rastro sea continuo
     if (d < 30){ const n = Math.floor(d / MIN_STEP);
-      for (let i=1;i<n;i++){ const f=i/n; const p=[last.lat+(lat-last.lat)*f, last.lng+(lng-last.lng)*f];
-        p[0]=+p[0].toFixed(7); p[1]=+p[1].toFixed(7); data.trail.push(p); drawPoint(p); } }
+      for (let i=1;i<n;i++){ const f=i/n; const p=[+(last.lat+(lat-last.lat)*f).toFixed(7), +(last.lng+(lng-last.lng)*f).toFixed(7)]; data.trail.push(p); drawPoint(p); } }
   }
   const p = [+lat.toFixed(7), +lng.toFixed(7)];
   data.trail.push(p); drawPoint(p); last = ll; persist();
 }
-function onErr(e){ document.getElementById('st').textContent = 'Sin GPS: ' + e.message; }
+function onErr(e){ $('st').textContent = 'Sin GPS: ' + e.message; }
 if ('geolocation' in navigator) navigator.geolocation.watchPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
 else onErr({message:'no disponible'});
 
-// Mantener la pantalla encendida
-let wl = null; async function lock(){ try { wl = await navigator.wakeLock.request('screen'); } catch(e){} }
+// Brújula del dispositivo
+function onOrient(e){
+  let h = null;
+  if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+  else if (e.absolute && e.alpha != null) h = 360 - e.alpha;
+  if (h == null) return;
+  const so = (screen.orientation && screen.orientation.angle) || 0;
+  compassHeading = (h + so + 360) % 360; updateHeading();
+}
+let orientOn = false;
+function enableCompass(){
+  if (orientOn) return;
+  const start = () => { orientOn = true;
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true); };
+  if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function')
+    DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') start(); }).catch(()=>{});
+  else start();
+}
+enableCompass(); // Android
+$('compass').onclick = enableCompass; // iOS pide permiso al tocar
+document.addEventListener('touchend', function once(){ enableCompass(); document.removeEventListener('touchend', once); }, {once:true});
+
+// Pantalla encendida
+async function lock(){ try { await navigator.wakeLock.request('screen'); } catch(e){} }
 lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible') lock(); });
 
-map.on('click', e => {
-  if (!addMode) return;
-  const note = prompt('¿Qué setas? (opcional)', '') ;
-  if (note === null) return;
-  const s = {lat:+e.latlng.lat.toFixed(7), lng:+e.latlng.lng.toFixed(7), t:Date.now(), note:note.trim()};
-  data.setas.push(s); addSetaMarker(s); persist();
-  setAdd(false);
-});
-map.on('dragstart', () => { follow = false; bFollow.classList.remove('on'); });
+// ---------- Botones ----------
+map.on('click', e => { if (addMode) openModal(null, e.latlng); });
+map.on('dragstart', () => { follow = false; $('bFollow').classList.remove('on'); });
+$('bRec').onclick = () => { recording = !recording; last = null; $('bRec').classList.toggle('on', recording); $('bRec').textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
+function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
+$('bSeta').onclick = () => setAdd(!addMode);
+$('bFollow').onclick = () => { follow = !follow; $('bFollow').classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
+$('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); };
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(()=>t.style.display='none', 3000); }
 
-const bRec = document.getElementById('bRec'), bSeta = document.getElementById('bSeta'), bFollow = document.getElementById('bFollow');
-bRec.onclick = () => { recording = !recording; last = null; bRec.classList.toggle('on', recording); bRec.textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
-function setAdd(v){ addMode = v; bSeta.classList.toggle('on', v); bSeta.textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
-bSeta.onclick = () => setAdd(!addMode);
-bSeta.oncontextmenu = e => { e.preventDefault(); if (me){ const ll = me.getLatLng(); map.fire('click',{latlng:ll}); } };
-bFollow.onclick = () => { follow = !follow; bFollow.classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
-document.getElementById('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); };
-document.getElementById('bMore').onclick = () => {
-  const o = prompt('1 = Añadir seta aquí (mi posición)\n2 = Exportar datos\n3 = Importar datos\n4 = Borrar rastro\n5 = Borrar todo', '');
-  if (o==='1' && me){ setAdd(true); map.fire('click',{latlng:me.getLatLng()}); }
+$('bMore').onclick = () => {
+  const o = prompt('1 = Añadir seta en mi posición\n2 = Exportar datos (.json)\n3 = Importar datos\n4 = Borrar rastro\n5 = Borrar todo', '');
+  if (o==='1') { if (me) openModal(null, me.getLatLng()); else alert('Aún no hay posición GPS'); }
   if (o==='2'){ const blob = new Blob([JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})],{type:'application/json'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'setas-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
-  if (o==='3'){ const i = document.createElement('input'); i.type='file'; i.accept='.json';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rastro-seta-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
+  if (o==='3'){ const i = document.createElement('input'); i.type='file'; i.accept='.json,application/json';
     i.onchange = () => { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result);
-      (d.trail||[]).forEach(p=>{data.trail.push(p); drawPoint(p);}); (d.setas||[]).forEach(s=>{data.setas.push(s); addSetaMarker(s);}); persist(); } catch(e){ alert('Archivo no válido'); } };
+      (d.trail||[]).forEach(p=>{data.trail.push(p); drawPoint(p);});
+      (d.setas||[]).forEach(s=>{ if (!s.species) { s.species = s.note || 'Sin especificar'; s.note=''; } data.setas.push(s); });
+      refreshSetaMarkers(); persist(); toast('Datos importados'); } catch(e){ alert('Archivo no válido'); } };
       r.readAsText(i.files[0]); }; i.click(); }
-  if ((o==='4'||o==='5') && confirm('¿Seguro?')){
-    trailRenderer._container && map.eachLayer(l => { if (l.options && l.options.pane==='trail') map.removeLayer(l); });
-    data.trail = []; last = null;
+  if ((o==='4'||o==='5') && confirm('¿Seguro? No se puede deshacer.')){
+    trailLayer.clearLayers(); data.trail = []; last = null;
     if (o==='5'){ data.setas.forEach(s=>map.removeLayer(s._m)); data.setas = []; }
     persist(); }
 };
 
-// --- PWA: instalación y actualización automática ---
+// ---------- Informe PDF ----------
+$('bPdf').onclick = () => {
+  const pts = data.trail.map(p=>L.latLng(p)).concat(data.setas.map(s=>L.latLng(s.lat,s.lng)));
+  if (!pts.length) { alert('Todavía no hay rastro ni setas que exportar.'); return; }
+  const wasFollow = follow; follow = false;
+  const times = data.setas.map(s=>s.t);
+  const area = Math.round(data.trail.length * MIN_STEP * RADIUS * 2);
+  const rows = data.setas.map((s,i) => `<tr><td>${i+1}</td><td>${esc(s.species)}</td><td>${fmtDate(s.t)}</td><td>${fmtLat(s.lat)}<br>${fmtLng(s.lng)}</td><td>${esc(s.note)}</td></tr>`).join('');
+  const counts = {}; data.setas.forEach(s => counts[s.species] = (counts[s.species]||0)+1);
+  const summary = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)}: <b>${v}</b>`).join(' · ');
+  $('report').innerHTML = `<h1>🍄 Rastro Seta — informe de salida</h1>
+    <p>Generado el ${fmtDate(Date.now())}${times.length ? ` · Setas recogidas entre ${fmtDate(Math.min(...times))} y ${fmtDate(Math.max(...times))}` : ''}<br>
+    Zona recorrida aprox.: ${area} m² · Setas encontradas: <b>${data.setas.length}</b>${summary ? '<br>' + summary : ''}</p>`;
+  const tableHtml = data.setas.length
+    ? `<table><thead><tr><th>Nº</th><th>Especie</th><th>Fecha y hora</th><th>Ubicación</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<p>No se registraron setas en esta salida.</p>';
+  let after = document.getElementById('reportAfter');
+  if (!after) { after = document.createElement('div'); after.id = 'reportAfter'; after.className = 'printOnly'; document.body.appendChild(after); }
+  after.innerHTML = tableHtml;
+  document.body.classList.add('printing');
+  setTimeout(() => {
+    map.invalidateSize(); map.fitBounds(L.latLngBounds(pts), {padding:[30,30], maxZoom:19});
+    let done = false; const go = () => { if (done) return; done = true; setTimeout(() => window.print(), 400); };
+    (satOn?sat:osm).once('load', go); setTimeout(go, 3500);
+  }, 100);
+  window.onafterprint = () => { document.body.classList.remove('printing'); follow = wasFollow; map.invalidateSize(); };
+};
+
+// ---------- PWA: actualización automática ----------
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(reg => {
     const check = () => reg.update().catch(()=>{});
@@ -162,13 +346,17 @@ if ('serviceWorker' in navigator) {
   let hadController = !!navigator.serviceWorker.controller, reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || reloaded) { hadController = true; return; }
-    reloaded = true;
-    try { sessionStorage.setItem('rs_upd','1'); } catch(e){}
-    location.reload();
+    reloaded = true; try { sessionStorage.setItem('rs_upd','1'); } catch(e){} location.reload();
   });
-  try { if (sessionStorage.getItem('rs_upd')) { sessionStorage.removeItem('rs_upd');
-    const u=document.getElementById('upd'); u.style.display='block'; setTimeout(()=>u.style.display='none',3000); } } catch(e){}
+  try { if (sessionStorage.getItem('rs_upd')) { sessionStorage.removeItem('rs_upd'); toast('Nueva versión instalada ✓'); } } catch(e){}
 }
 </script>
+<style>
+  #reportAfter{display:none}
+  @media print{ #reportAfter{display:block;font-size:10pt} #reportAfter table{width:100%;border-collapse:collapse;margin-top:5mm}
+    #reportAfter th,#reportAfter td{border:1px solid #bbb;padding:2mm;text-align:left;vertical-align:top}
+    #reportAfter th{background:#eee} #reportAfter tr{page-break-inside:avoid} }
+  body.printing #map{position:absolute;inset:0}
+</style>
 </body>
 </html>
