@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  :root{--crema:#f4efe3;--bosque:#2b3a2c;--teja:#c8553d;--ocre:#e8a33d}
+  :root{--crema:#f4efe3;--bosque:#2b3a2c;--teja:#c8553d;--ocre:#2ee65a}
   html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#1d2a1f;color:var(--bosque)}
   #map{position:absolute;inset:0}
   .trail-pane{opacity:.45}
@@ -161,7 +161,7 @@ osm.addTo(map); let satOn = false;
 map.createPane('trail'); map.getPane('trail').classList.add('trail-pane'); map.getPane('trail').style.zIndex = 390;
 const trailRenderer = L.canvas({pane:'trail', padding:0.5});
 const trailLayer = L.layerGroup().addTo(map);
-const drawPoint = p => L.circle(p, {radius:RADIUS, renderer:trailRenderer, pane:'trail', stroke:false, fillColor:'#e8a33d', fillOpacity:1, interactive:false}).addTo(trailLayer);
+const drawPoint = p => L.circle(p, {radius:RADIUS, renderer:trailRenderer, pane:'trail', stroke:false, fillColor:'#2ee65a', fillOpacity:1, interactive:false}).addTo(trailLayer);
 data.trail.forEach(drawPoint);
 
 // ---------- Setas ----------
@@ -393,7 +393,7 @@ async function renderMapImage(W, H){
     }
   await Promise.all(jobs);
   // Rastro
-  const t = document.createElement('canvas'); t.width = W; t.height = H; const tg = t.getContext('2d'); tg.fillStyle = '#e8a33d';
+  const t = document.createElement('canvas'); t.width = W; t.height = H; const tg = t.getContext('2d'); tg.fillStyle = '#2ee65a';
   data.trail.forEach(p => { const mpp = 156543.03*Math.cos(p[0]*Math.PI/180)/2**z, r = Math.max(2, RADIUS/mpp);
     tg.beginPath(); tg.arc(projX(p[1],z)-ox, projY(p[0],z)-oy, r, 0, 7); tg.fill(); });
   g.globalAlpha = .55; g.drawImage(t,0,0); g.globalAlpha = 1;
