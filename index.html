@@ -29,6 +29,9 @@
        padding:10px 8px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}
   #bar button{border:0;border-radius:14px;padding:11px 12px;font-size:14px;font-weight:600;background:var(--crema);color:var(--bosque);box-shadow:0 2px 8px rgba(0,0,0,.3)}
   #bar button.on{background:var(--teja);color:#fff}
+  #bar #bRec{background:#2e9e4f;color:#fff}
+  #bar #bRec.on{background:var(--teja)}
+  #zoneHint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom));z-index:1001;background:var(--bosque);color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;display:none;text-align:center}
   #toast{position:absolute;top:calc(74px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:var(--teja);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none;white-space:nowrap}
   .arrow{width:34px;height:34px;will-change:transform}
   .seta{position:relative;font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
@@ -97,13 +100,13 @@
 <div id="status" class="panel"><span id="st">Buscando GPS…</span><br><span id="stats">0 m · 0 🍄</span></div>
 <div id="carChip" class="panel"><svg viewBox="0 0 40 40" id="carArrow"><path d="M20 4 L31 32 L20 25 L9 32 Z" fill="#c8553d" stroke="#fff" stroke-width="2"/></svg><span id="carTxt">🚗 --</span></div>
 <div id="toast"></div>
+<div id="zoneHint"></div>
 
 <div id="bar">
-  <button id="bRec" class="on">⏸ Pausar</button>
+  <button id="bRec">▶ Iniciar salida</button>
   <button id="bSeta">🍄 Añadir</button>
-  <button id="bFollow" class="on">🎯 Seguir</button>
-  <button id="bMap">🛰 Capa</button>
-  <button id="bPdf">📄 PDF</button>
+  <button id="bFollow" class="on">🎯 Centrar</button>
+  <button id="bMap">🛰 Vista satélite</button>
   <button id="bMore">☰ Menú</button>
 </div>
 
@@ -136,7 +139,8 @@
   <div class="col">
     <button class="bOk" id="uStats">📊 Estadísticas de la salida</button>
     <button class="bOk" id="uCar">🚗 Marcar el coche aquí</button>
-    <button class="bOk" id="uNew">➕ Empezar nueva salida</button>
+    <button class="bOk" id="bPdf">📄 Informe PDF / compartir</button>
+    <button class="bOk" id="uZone">🔲 Delimitar zona de rastreo</button>
     <button class="bNo" id="uHist">🗂 Mis salidas</button>
     <div style="display:flex;gap:8px"><button class="bNo" id="uExp" style="flex:1">⬇ Exportar</button><button class="bNo" id="uImp" style="flex:1">⬆ Importar</button></div>
     <button class="bDel" id="uClear">🧹 Borrar rastro de esta salida</button>
@@ -154,7 +158,7 @@
   <div class="col" style="margin-top:12px"><button class="bNo" onclick="this.closest('.mModal').classList.remove('show')">Cerrar</button></div>
 </div></div>
 <div id="pdfModal" class="mModal"><div class="sheet2">
-  <h3>📄 Informe de la salida</h3>
+  <h3 id="pdfTitle">📄 Informe de la salida</h3>
   <p id="pdfMsg"></p>
   <div id="pdfBtns" class="col">
     <button class="bOk" id="pShare">📤 Compartir PDF (WhatsApp, correo…)</button>
@@ -276,7 +280,8 @@ $('mDel').onclick = () => {
 
 // ---------- Posición, flecha y brújula ----------
 let statPos = null, prevFix = null, baseAlt = null;
-let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
+let recording = !!data.active;
+let _r0 = 0, follow = true, addMode = false, me = null, accCircle = null, last = null;
 let shown = null, filt = null, anim = null, lastFixT = 0, targetHeading = null, shownHeading = null;
 function frame(){
   if (anim && me){
@@ -350,7 +355,7 @@ function onPos(pos){
   else if (speed != null && speed < 0.2) moveHeading = null;
   if (!lastHeadPos) lastHeadPos = ll;
   updateHeading();
-  $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'grabando':'pausado'}`;
+  $('st').textContent = acc > MAX_ACC ? `GPS impreciso ±${Math.round(acc)} m` : `GPS ±${Math.round(acc)} m · ${recording?'⏺ grabando':'sin salida activa'}`;
   if (recording && acc <= MAX_ACC) {
     const now = Date.now();
     if (statPos) { const d = statPos.distanceTo(ll); if (d >= Math.max(2, acc/4)) { data.dist += d; statPos = ll; } } else statPos = ll;
@@ -409,6 +414,7 @@ lock(); document.addEventListener('visibilitychange', () => { if (document.visib
 
 // ---------- Botones ----------
 map.on('click', e => {
+  if (zoneDraft) { zoneTap(e.latlng); return; }
   if (!addMode) return;
   if (moving) { const m = moving; moving = null; setAdd(false);
     if (m.s) { m.s.lat = +e.latlng.lat.toFixed(7); m.s.lng = +e.latlng.lng.toFixed(7); m.s._m.setLatLng(e.latlng); openModal(m.s); }
@@ -418,7 +424,24 @@ map.on('click', e => {
 });
 map.on('movestart zoomstart', e => {}); map.getContainer().addEventListener('touchstart', () => userTouching = true, {passive:true}); map.getContainer().addEventListener('touchend', () => setTimeout(()=>userTouching=false, 300), {passive:true});
 map.on('dragstart', () => { follow = false; $('bFollow').classList.remove('on'); });
-$('bRec').onclick = () => { recording = !recording; last = null; $('bRec').classList.toggle('on', recording); $('bRec').textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
+function updRec(){ $('bRec').classList.toggle('on', recording); $('bRec').textContent = recording ? '⏹ Finalizar salida' : '▶ Iniciar salida'; }
+$('bRec').onclick = () => {
+  if (!recording) {
+    if (data.trail.length || data.setas.length || data.end) {  // la salida anterior ya terminó: empieza otra
+      const ns = newSession(); if (data.car && !data.end) ns.car = data.car;
+      if (data.zone) ns.zone = data.zone;  // conserva la zona por si repites sitio
+      store.sessions.push(ns); loadSession(ns);
+    }
+    data.start = Date.now(); data.active = true; data.end = null; recording = true; last = null; statPos = null; prevFix = null; baseAlt = null;
+    follow = true; $('bFollow').classList.add('on'); if (me) map.setView(me.getLatLng(), Math.max(map.getZoom(), 18));
+    persist(); updRec(); toast('▶ Salida iniciada'); navigator.vibrate && navigator.vibrate(60);
+  } else {
+    if (!confirm('¿Finalizar la salida?')) return;
+    recording = false; data.active = false; data.end = Date.now(); data.lastT = data.lastT || data.end; persist(); updRec();
+    openReport(true);
+  }
+};
+updRec();
 function setAdd(v){ addMode = v; $('bSeta').classList.toggle('on', v); $('bSeta').textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
 $('bSeta').onclick = () => {
   if (addMode) { setAdd(false); moving = null; return; }
@@ -426,7 +449,7 @@ $('bSeta').onclick = () => {
   else { setAdd(true); toast('Sin GPS: toca el mapa donde está la seta'); }
 };
 $('bFollow').onclick = () => { follow = !follow; $('bFollow').classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
-$('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); };
+$('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); $('bMap').textContent = satOn ? '🗺 Vista mapa' : '🛰 Vista satélite'; };
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(()=>t.style.display='none', 3000); }
 
 const show = id => $(id).classList.add('show'), hide = id => $(id).classList.remove('show');
@@ -485,7 +508,8 @@ $('uStats').onclick = () => {
       <div><b>${fmtDur(st.moving)}</b><span>En movimiento</span></div>
       <div><b>${st.gain} m</b><span>Desnivel acumulado ↑${st.altMax!=null ? ` · ${Math.round(st.altMin)}–${Math.round(st.altMax)} m` : ''}</span></div>
       <div><b>${st.units}</b><span>Setas (${st.spots} puntos)</span></div>
-      <div><b>${st.area} m²</b><span>Zona rastreada</span></div>
+      <div><b>${st.area} m²</b><span>Superficie rastreada</span></div>
+      ${zoneCoverage(data) ? `<div style="grid-column:span 2"><b>${zoneCoverage(data).pct} %</b><span>de la zona delimitada (${fmtArea(zoneCoverage(data).total)}) recorrida</span></div>` : ''}
     </div>
     ${sp.length ? '<ul class="spList">' + sp.map(([k,v]) => `<li><span>${esc(k)}</span><b>${v}</b></li>`).join('') + '</ul>' : ''}`;
   show('statsModal');
@@ -495,18 +519,11 @@ $('uStats').onclick = () => {
 function loadSession(ss){
   data.setas.forEach(x => { if (x._m) { map.removeLayer(x._m); delete x._m; } });
   trailLayer.clearLayers();
-  data = ss; store.current = ss.id; last = null; statPos = null; prevFix = null; baseAlt = null;
+  data = ss; store.current = ss.id; recording = !!ss.active; updRec && updRec(); drawZone && drawZone(); last = null; statPos = null; prevFix = null; baseAlt = null;
   data.trail.forEach(drawPoint); refreshSetaMarkers(); drawCar(); persist();
   const pts = data.trail.map(p=>L.latLng(p)).concat(data.setas.map(x=>L.latLng(x.lat,x.lng)));
   if (pts.length) { follow = false; $('bFollow').classList.remove('on'); map.fitBounds(L.latLngBounds(pts), {padding:[60,60], maxZoom:19}); }
 }
-$('uNew').onclick = () => {
-  hide('menuModal');
-  if (!data.trail.length && !data.setas.length) { data.start = Date.now(); data.dist = 0; data.movingMs = 0; data.gain = 0; persist(); toast('Nueva salida iniciada'); return; }
-  if (!confirm('¿Terminar esta salida y empezar una nueva? La actual queda guardada en "Mis salidas".')) return;
-  const ns = newSession(); if (data.car) ns.car = data.car; store.sessions.push(ns); loadSession(ns);
-  follow = true; $('bFollow').classList.add('on'); toast('Nueva salida iniciada');
-};
 function renderHist(){
   $('histList').innerHTML = store.sessions.slice().reverse().map(ss => { const st = statsOf(ss);
     return `<div class="hItem ${ss.id===data.id?'cur':''}"><b>${new Date(ss.start).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b>${ss.id===data.id?' · actual':''}<br>
@@ -543,6 +560,42 @@ $('uClear').onclick = () => { hide('menuModal');
 
 drawCar();
 
+// --- Zona de rastreo (4 puntos) ---
+let zoneLayer = L.layerGroup().addTo(map), zoneDraft = null;
+function drawZone(){
+  zoneLayer.clearLayers();
+  const pts = zoneDraft || data.zone; if (!pts || !pts.length) return;
+  if (pts.length >= 3) L.polygon(pts, {color:'#ffd400', weight:3, dashArray:'8 6', fill:true, fillOpacity:.06, interactive:false}).addTo(zoneLayer);
+  else if (pts.length === 2) L.polyline(pts, {color:'#ffd400', weight:3, dashArray:'8 6', interactive:false}).addTo(zoneLayer);
+  if (zoneDraft) pts.forEach(p => L.circleMarker(p, {radius:7, color:'#fff', weight:2, fillColor:'#ffd400', fillOpacity:1, interactive:false}).addTo(zoneLayer));
+}
+function zoneHint(t){ const h = $('zoneHint'); h.style.display = t ? 'block' : 'none'; h.textContent = t || ''; }
+$('uZone').onclick = () => {
+  hide('menuModal');
+  if (data.zone && !confirm('Ya hay una zona. ¿Quieres borrarla y marcar una nueva?\n(Cancelar = mantenerla)')) return;
+  data.zone = null; zoneDraft = []; follow = false; $('bFollow').classList.remove('on'); setAdd(false); drawZone();
+  zoneHint('Toca el mapa para marcar la esquina 1 de 4  ·  toca aquí para cancelar');
+};
+$('zoneHint').onclick = () => { zoneDraft = null; zoneHint(''); drawZone(); };
+function zoneTap(ll){
+  zoneDraft.push([+ll.lat.toFixed(7), +ll.lng.toFixed(7)]); drawZone(); navigator.vibrate && navigator.vibrate(20);
+  if (zoneDraft.length < 4) { zoneHint(`Esquina ${zoneDraft.length + 1} de 4  ·  toca aquí para cancelar`); return; }
+  data.zone = zoneDraft; zoneDraft = null; zoneHint(''); drawZone(); persist();
+  toast(`🔲 Zona marcada: ${fmtArea(polyArea(data.zone))}`);
+}
+const toXY = (p, lat0) => [p[1]*111320*Math.cos(lat0*Math.PI/180), p[0]*110540];
+function polyArea(z){ const lat0 = z[0][0], q = z.map(p => toXY(p, lat0)); let a = 0;
+  for (let i=0;i<q.length;i++){ const [x1,y1] = q[i], [x2,y2] = q[(i+1)%q.length]; a += x1*y2 - x2*y1; } return Math.abs(a)/2; }
+function inPoly(p, z){ let c = false; for (let i=0,j=z.length-1;i<z.length;j=i++){
+  if ((z[i][0] > p[0]) !== (z[j][0] > p[0]) && p[1] < (z[j][1]-z[i][1])*(p[0]-z[i][0])/(z[j][0]-z[i][0]) + z[i][1]) c = !c; } return c; }
+const fmtArea = m2 => m2 < 10000 ? `${Math.round(m2)} m²` : `${(m2/10000).toFixed(2).replace('.',',')} ha`;
+function zoneCoverage(ss){
+  if (!ss.zone) return null;
+  const total = polyArea(ss.zone), inside = ss.trail.filter(p => inPoly(p, ss.zone)).length;
+  return {total, pct: Math.min(100, Math.round(inside * MIN_STEP * RADIUS * 2 / total * 100))};
+}
+drawZone();
+
 // ---------- Informe PDF + compartir ----------
 let jspdfP = null;
 const loadJsPDF = () => jspdfP || (jspdfP = new Promise((ok, ko) => {
@@ -559,7 +612,7 @@ const projY = (lat, z) => { const r = lat*Math.PI/180; return (1 - Math.log(Math
 const loadImg = src => new Promise(ok => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
 
 async function renderMapImage(W, H){
-  const pts = data.trail.map(p=>({lat:p[0],lng:p[1]})).concat(data.setas.map(s=>({lat:s.lat,lng:s.lng})));
+  const pts = data.trail.map(p=>({lat:p[0],lng:p[1]})).concat(data.setas.map(s=>({lat:s.lat,lng:s.lng})), (data.zone||[]).map(p=>({lat:p[0],lng:p[1]})), data.car ? [data.car] : []);
   let minLa=Math.min(...pts.map(p=>p.lat)), maxLa=Math.max(...pts.map(p=>p.lat)), minLo=Math.min(...pts.map(p=>p.lng)), maxLo=Math.max(...pts.map(p=>p.lng));
   const pad = 60; let z = 19;
   while (z > 3 && (projX(maxLo,z)-projX(minLo,z) > W-2*pad || projY(minLa,z)-projY(maxLa,z) > H-2*pad)) z--;
@@ -580,6 +633,9 @@ async function renderMapImage(W, H){
   data.trail.forEach(p => { const mpp = 156543.03*Math.cos(p[0]*Math.PI/180)/2**z, r = Math.max(2, RADIUS/mpp);
     tg.beginPath(); tg.arc(projX(p[1],z)-ox, projY(p[0],z)-oy, r, 0, 7); tg.fill(); });
   g.globalAlpha = .55; g.drawImage(t,0,0); g.globalAlpha = 1;
+  if (data.zone) { g.setLineDash([14,10]); g.lineWidth = 4; g.strokeStyle = '#e0b800'; g.beginPath();
+    data.zone.forEach((p,i) => { const x = projX(p[1],z)-ox, y = projY(p[0],z)-oy; i ? g.lineTo(x,y) : g.moveTo(x,y); }); g.closePath(); g.stroke(); g.setLineDash([]); }
+  if (data.car) { const x = projX(data.car.lng,z)-ox, y = projY(data.car.lat,z)-oy; g.fillStyle = '#2b3a2c'; g.fillRect(x-14,y-10,28,20); g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('P', x, y+1); }
   // Setas numeradas
   data.setas.forEach((s,i) => { const x = projX(s.lng,z)-ox, y = projY(s.lat,z)-oy;
     g.beginPath(); g.arc(x,y,15,0,7); g.fillStyle = '#c8553d'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke();
@@ -602,7 +658,8 @@ async function buildPdf(){
   if (times.length) { doc.text(`Setas recogidas entre ${pdfDate(Math.min(...times))} y ${pdfDate(Math.max(...times))}`, M, y); y += 5; }
   const st = statsOf(data);
   doc.text(`Distancia: ${fmtDist(st.dist)}   ·   Tiempo: ${fmtDur(st.total)} (${fmtDur(st.moving)} en movimiento)   ·   Desnivel: +${st.gain} m`, M, y); y += 5;
-  doc.text(`Zona rastreada aprox.: ${area} m2   ·   Setas: ${st.units} en ${st.spots} puntos`, M, y); y += 4;
+  const zc = zoneCoverage(data); if (zc) { doc.text(`Zona delimitada: ${fmtArea(zc.total).replace('²','2')}  ·  recorrida aprox. ${zc.pct} %`, M, y); y += 5; }
+  doc.text(`Superficie rastreada aprox.: ${area} m2   ·   Setas: ${st.units} en ${st.spots} puntos`, M, y); y += 4;
   const ih = PW * 1100/1600; doc.addImage(img, 'JPEG', M, y, PW, ih); doc.setDrawColor(150); doc.rect(M, y, PW, ih); y += ih + 7;
   if (data.setas.length) {
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(43,58,44); doc.text('Resumen por especie', M, y); y += 5;
@@ -632,8 +689,10 @@ const summaryText = () => {
   return `🍄 Rastro Seta - salida del ${new Date(data.start).toLocaleDateString('es-ES')}\n${fmtDist(st.dist)} · ${fmtDur(st.total)} · +${st.gain} m\nSetas: ${st.units}\n\n${lines.join('\n')}`;
 };
 let pdfBlob = null;
-$('bPdf').onclick = async () => {
-  if (!data.trail.length && !data.setas.length) { alert('Todavía no hay rastro ni setas que exportar.'); return; }
+$('bPdf').onclick = () => { hide('menuModal'); openReport(false); };
+async function openReport(finished){
+  $('pdfTitle').textContent = finished ? '✅ Salida finalizada' : '📄 Informe de la salida';
+  if (!data.trail.length && !data.setas.length) { if (!finished) alert('Todavía no hay rastro ni setas que exportar.'); else toast('Salida finalizada'); return; }
   $('pdfMsg').textContent = 'Generando PDF…'; $('pdfBtns').style.display = 'none'; $('pdfModal').classList.add('show');
   try { pdfBlob = await buildPdf(); $('pdfMsg').textContent = 'Informe listo.'; $('pdfBtns').style.display = 'flex';
         $('pShare').style.display = (navigator.canShare && navigator.canShare({files:[new File([pdfBlob], pdfName(), {type:'application/pdf'})]})) ? 'block' : 'none'; }

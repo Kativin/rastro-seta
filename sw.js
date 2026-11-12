@@ -1,5 +1,5 @@
 // Sube este número en cada nueva versión (o cambia cualquier archivo): los móviles se actualizan solos.
-const VERSION = 'rastro-seta-v7';
+const VERSION = 'rastro-seta-v8';
 const APP = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'];
 const TILES = 'rastro-seta-tiles-cors';
