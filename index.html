@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Rastro Seta</title>
+<meta name="theme-color" content="#2b3a2c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rastro Seta">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#1d2a1f}
+  #map{position:absolute;inset:0}
+  .trail-pane{opacity:.45}
+  #bar{position:absolute;left:0;right:0;bottom:0;z-index:1000;display:flex;gap:8px;justify-content:center;
+       padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}
+  #bar button{border:0;border-radius:14px;padding:12px 14px;font-size:15px;font-weight:600;background:#f4efe3;color:#2b3a2c;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  #bar button.on{background:#c8553d;color:#fff}
+  #info{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:1000;
+        background:rgba(244,239,227,.94);color:#2b3a2c;border-radius:12px;padding:8px 12px;font-size:13px;
+        display:flex;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+  .seta{font-size:28px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+  #upd{position:absolute;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1001;background:#c8553d;color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;display:none}
+  .me{width:16px;height:16px;border-radius:50%;background:#2a7de1;border:3px solid #fff;box-shadow:0 0 0 2px rgba(42,125,225,.4)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="info"><span id="st">Buscando GPS…</span><span id="stats">0 m · 0 🍄</span></div>
+<div id="upd">Nueva versión instalada ✓</div>
+<div id="bar">
+  <button id="bRec" class="on">⏸ Pausar</button>
+  <button id="bSeta">🍄 Añadir</button>
+  <button id="bFollow" class="on">🎯 Seguir</button>
+  <button id="bMap">🛰 Capa</button>
+  <button id="bMore">⋯</button>
+</div>
+<script>
+const RADIUS = 1.5;           // metros (3 m de diámetro)
+const MIN_STEP = 0.75;        // distancia mínima entre puntos guardados
+const MAX_ACC = 25;           // descarta lecturas GPS con precisión peor que esto (m)
+const KEY = 'buscasetas_v1';
+
+let data = {trail:[], setas:[]};
+try { const s = localStorage.getItem(KEY); if (s) data = JSON.parse(s); } catch(e){}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} };
+
+const map = L.map('map', {zoomControl:false, maxZoom:21}).setView([42.24,-8.72], 17);
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap'});
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'© Esri'});
+osm.addTo(map); let satOn = false;
+
+map.createPane('trail'); map.getPane('trail').classList.add('trail-pane'); map.getPane('trail').style.zIndex = 390;
+const trailRenderer = L.canvas({pane:'trail', padding:0.5});
+const trailStyle = {renderer:trailRenderer, pane:'trail', stroke:false, fillColor:'#e8a33d', fillOpacity:1, interactive:false};
+const drawPoint = p => L.circle(p, Object.assign({radius:RADIUS}, trailStyle)).addTo(map);
+data.trail.forEach(drawPoint);
+
+const setaIcon = L.divIcon({className:'', html:'<div class="seta">🍄</div>', iconSize:[28,28], iconAnchor:[14,24]});
+function addSetaMarker(s){
+  const m = L.marker([s.lat,s.lng], {icon:setaIcon}).addTo(map);
+  const d = new Date(s.t);
+  m.bindPopup(`<b>${s.note ? s.note.replace(/</g,'&lt;') : 'Setas'}</b><br>${d.toLocaleString('es-ES')}<br><a href="#" data-del="${s.t}">Borrar</a>`);
+  s._m = m;
+}
+data.setas.forEach(addSetaMarker);
+map.on('popupopen', e => {
+  const a = e.popup.getElement().querySelector('[data-del]');
+  if (a) a.onclick = ev => { ev.preventDefault();
+    const t = +a.dataset.del; const i = data.setas.findIndex(s=>s.t===t);
+    if (i>=0){ map.removeLayer(data.setas[i]._m); data.setas.splice(i,1); persist(); } };
+});
+const persist = () => { data.setas.forEach(s=>{});
+  try { localStorage.setItem(KEY, JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})); } catch(e){}
+  updStats(); };
+
+let recording = true, follow = true, addMode = false, me = null, accCircle = null, last = null;
+const meIcon = L.divIcon({className:'', html:'<div class="me"></div>', iconSize:[22,22], iconAnchor:[11,11]});
+
+function updStats(){
+  const m = Math.round(data.trail.length * MIN_STEP * 3); // aprox. m² no; mostramos área aprox
+  const area = Math.round(data.trail.length * MIN_STEP * RADIUS * 2);
+  document.getElementById('stats').textContent = `~${area} m² · ${data.setas.length} 🍄`;
+}
+updStats();
+
+function onPos(pos){
+  const {latitude:lat, longitude:lng, accuracy:acc} = pos.coords;
+  const ll = L.latLng(lat,lng);
+  if (!me){ me = L.marker(ll,{icon:meIcon, zIndexOffset:1000}).addTo(map);
+            accCircle = L.circle(ll,{radius:acc, color:'#2a7de1', weight:1, fillOpacity:.08, interactive:false}).addTo(map);
+            map.setView(ll, 19); }
+  me.setLatLng(ll); accCircle.setLatLng(ll).setRadius(acc);
+  document.getElementById('st').textContent = acc > MAX_ACC ? `GPS impreciso (±${Math.round(acc)} m)` : `GPS ±${Math.round(acc)} m${recording?' · grabando':' · pausado'}`;
+  if (follow) map.panTo(ll, {animate:true});
+  if (!recording || acc > MAX_ACC) return;
+  if (last){
+    const d = last.distanceTo(ll);
+    if (d < MIN_STEP) return;
+    // rellenar huecos si hubo salto pequeño, para que el rastro sea continuo
+    if (d < 30){ const n = Math.floor(d / MIN_STEP);
+      for (let i=1;i<n;i++){ const f=i/n; const p=[last.lat+(lat-last.lat)*f, last.lng+(lng-last.lng)*f];
+        p[0]=+p[0].toFixed(7); p[1]=+p[1].toFixed(7); data.trail.push(p); drawPoint(p); } }
+  }
+  const p = [+lat.toFixed(7), +lng.toFixed(7)];
+  data.trail.push(p); drawPoint(p); last = ll; persist();
+}
+function onErr(e){ document.getElementById('st').textContent = 'Sin GPS: ' + e.message; }
+if ('geolocation' in navigator) navigator.geolocation.watchPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
+else onErr({message:'no disponible'});
+
+// Mantener la pantalla encendida
+let wl = null; async function lock(){ try { wl = await navigator.wakeLock.request('screen'); } catch(e){} }
+lock(); document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible') lock(); });
+
+map.on('click', e => {
+  if (!addMode) return;
+  const note = prompt('¿Qué setas? (opcional)', '') ;
+  if (note === null) return;
+  const s = {lat:+e.latlng.lat.toFixed(7), lng:+e.latlng.lng.toFixed(7), t:Date.now(), note:note.trim()};
+  data.setas.push(s); addSetaMarker(s); persist();
+  setAdd(false);
+});
+map.on('dragstart', () => { follow = false; bFollow.classList.remove('on'); });
+
+const bRec = document.getElementById('bRec'), bSeta = document.getElementById('bSeta'), bFollow = document.getElementById('bFollow');
+bRec.onclick = () => { recording = !recording; last = null; bRec.classList.toggle('on', recording); bRec.textContent = recording ? '⏸ Pausar' : '⏺ Grabar'; };
+function setAdd(v){ addMode = v; bSeta.classList.toggle('on', v); bSeta.textContent = v ? 'Toca el mapa' : '🍄 Añadir'; }
+bSeta.onclick = () => setAdd(!addMode);
+bSeta.oncontextmenu = e => { e.preventDefault(); if (me){ const ll = me.getLatLng(); map.fire('click',{latlng:ll}); } };
+bFollow.onclick = () => { follow = !follow; bFollow.classList.toggle('on', follow); if (follow && me) map.setView(me.getLatLng(), Math.max(map.getZoom(),18)); };
+document.getElementById('bMap').onclick = () => { satOn = !satOn; map.removeLayer(satOn?osm:sat); (satOn?sat:osm).addTo(map); };
+document.getElementById('bMore').onclick = () => {
+  const o = prompt('1 = Añadir seta aquí (mi posición)\n2 = Exportar datos\n3 = Importar datos\n4 = Borrar rastro\n5 = Borrar todo', '');
+  if (o==='1' && me){ setAdd(true); map.fire('click',{latlng:me.getLatLng()}); }
+  if (o==='2'){ const blob = new Blob([JSON.stringify({trail:data.trail, setas:data.setas.map(({_m,...r})=>r)})],{type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'setas-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); }
+  if (o==='3'){ const i = document.createElement('input'); i.type='file'; i.accept='.json';
+    i.onchange = () => { const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result);
+      (d.trail||[]).forEach(p=>{data.trail.push(p); drawPoint(p);}); (d.setas||[]).forEach(s=>{data.setas.push(s); addSetaMarker(s);}); persist(); } catch(e){ alert('Archivo no válido'); } };
+      r.readAsText(i.files[0]); }; i.click(); }
+  if ((o==='4'||o==='5') && confirm('¿Seguro?')){
+    trailRenderer._container && map.eachLayer(l => { if (l.options && l.options.pane==='trail') map.removeLayer(l); });
+    data.trail = []; last = null;
+    if (o==='5'){ data.setas.forEach(s=>map.removeLayer(s._m)); data.setas = []; }
+    persist(); }
+};
+
+// --- PWA: instalación y actualización automática ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(reg => {
+    const check = () => reg.update().catch(()=>{});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible') check(); });
+    setInterval(check, 30*60*1000);
+  });
+  let hadController = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) { hadController = true; return; }
+    reloaded = true;
+    try { sessionStorage.setItem('rs_upd','1'); } catch(e){}
+    location.reload();
+  });
+  try { if (sessionStorage.getItem('rs_upd')) { sessionStorage.removeItem('rs_upd');
+    const u=document.getElementById('upd'); u.style.display='block'; setTimeout(()=>u.style.display='none',3000); } } catch(e){}
+}
+</script>
+</body>
+</html>
