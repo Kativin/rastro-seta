@@ -1,8 +1,8 @@
 // Sube este número en cada nueva versión (o cambia cualquier archivo): los móviles se actualizan solos.
-const VERSION = 'rastro-seta-v2';
+const VERSION = 'rastro-seta-v3';
 const APP = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
-const TILES = 'rastro-seta-tiles';
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'];
+const TILES = 'rastro-seta-tiles-cors';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(APP)).then(() => self.skipWaiting()));
@@ -17,7 +17,7 @@ self.addEventListener('fetch', e => {
   // Teselas del mapa: caché primero (sirven sin cobertura en zonas ya vistas)
   if (/tile\.openstreetmap\.org|arcgisonline\.com/.test(url.host)) {
     e.respondWith(caches.open(TILES).then(c => c.match(req).then(r => r || fetch(req).then(res => {
-      if (res.ok || res.type === 'opaque') c.put(req, res.clone()); return res; }))));
+      if (res.ok) c.put(req, res.clone()); return res; }))));
     return;
   }
   // App: red primero (siempre la última versión), caché si no hay conexión

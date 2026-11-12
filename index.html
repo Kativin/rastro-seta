@@ -46,6 +46,12 @@
   #sheet .row button{flex:1;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:600}
   .bOk{background:var(--bosque);color:#fff}.bDel{background:var(--teja);color:#fff}.bNo{background:#ddd3bd;color:var(--bosque)}
   #report{display:none}
+  .mModal{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center}
+  .mModal.show{display:flex}
+  .sheet2{background:var(--crema);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box}
+  .sheet2 h3{margin:0 0 6px}
+  .sheet2 .col{display:flex;flex-direction:column;gap:8px}
+  .sheet2 button{border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600}
   /* Impresión / PDF */
   @media print{
     @page{size:A4;margin:12mm}
@@ -107,6 +113,18 @@
     <button class="bDel" id="mDel">Borrar</button>
     <button class="bNo" id="mCancel">Cancelar</button>
     <button class="bOk" id="mSave">Guardar</button>
+  </div>
+</div></div>
+
+<div id="pdfModal" class="mModal"><div class="sheet2">
+  <h3>📄 Informe de la salida</h3>
+  <p id="pdfMsg"></p>
+  <div id="pdfBtns" class="col">
+    <button class="bOk" id="pShare">📤 Compartir PDF (WhatsApp, correo…)</button>
+    <button class="bOk" id="pWa" style="background:#25d366">💬 Enviar resumen por WhatsApp</button>
+    <button class="bNo" id="pOpen">👁 Abrir / imprimir PDF</button>
+    <button class="bNo" id="pDown">⬇ Descargar PDF</button>
+    <button class="bNo" id="pClose">Cerrar</button>
   </div>
 </div></div>
 
@@ -308,33 +326,109 @@ $('bMore').onclick = () => {
     persist(); }
 };
 
-// ---------- Informe PDF ----------
-$('bPdf').onclick = () => {
-  const pts = data.trail.map(p=>L.latLng(p)).concat(data.setas.map(s=>L.latLng(s.lat,s.lng)));
-  if (!pts.length) { alert('Todavía no hay rastro ni setas que exportar.'); return; }
-  const wasFollow = follow; follow = false;
-  const times = data.setas.map(s=>s.t);
-  const area = Math.round(data.trail.length * MIN_STEP * RADIUS * 2);
-  const rows = data.setas.map((s,i) => `<tr><td>${i+1}</td><td>${esc(s.species)}</td><td>${fmtDate(s.t)}</td><td>${fmtLat(s.lat)}<br>${fmtLng(s.lng)}</td><td>${esc(s.note)}</td></tr>`).join('');
+// ---------- Informe PDF + compartir ----------
+let jspdfP = null;
+const loadJsPDF = () => jspdfP || (jspdfP = new Promise((ok, ko) => {
+  if (window.jspdf) return ok(window.jspdf);
+  const sc = document.createElement('script'); sc.src = 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  sc.onload = () => ok(window.jspdf); sc.onerror = () => { jspdfP = null; ko(new Error('No se pudo cargar el generador de PDF')); };
+  document.head.appendChild(sc);
+}));
+loadJsPDF().catch(()=>{});
+
+const TS = 256;
+const projX = (lng, z) => (lng + 180) / 360 * TS * 2**z;
+const projY = (lat, z) => { const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r)) / Math.PI) / 2 * TS * 2**z; };
+const loadImg = src => new Promise(ok => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+
+async function renderMapImage(W, H){
+  const pts = data.trail.map(p=>({lat:p[0],lng:p[1]})).concat(data.setas.map(s=>({lat:s.lat,lng:s.lng})));
+  let minLa=Math.min(...pts.map(p=>p.lat)), maxLa=Math.max(...pts.map(p=>p.lat)), minLo=Math.min(...pts.map(p=>p.lng)), maxLo=Math.max(...pts.map(p=>p.lng));
+  const pad = 60; let z = 19;
+  while (z > 3 && (projX(maxLo,z)-projX(minLo,z) > W-2*pad || projY(minLa,z)-projY(maxLa,z) > H-2*pad)) z--;
+  const cx = (projX(minLo,z)+projX(maxLo,z))/2, cy = (projY(minLa,z)+projY(maxLa,z))/2;
+  const ox = cx - W/2, oy = cy - H/2;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#e8e4da'; g.fillRect(0,0,W,H);
+  const jobs = [];
+  for (let tx = Math.floor(ox/TS); tx <= Math.floor((ox+W)/TS); tx++)
+    for (let ty = Math.floor(oy/TS); ty <= Math.floor((oy+H)/TS); ty++) {
+      const url = satOn ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${ty}/${tx}`
+                        : `https://${'abc'[(tx+ty)%3]}.tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
+      jobs.push(loadImg(url).then(img => { if (img) g.drawImage(img, tx*TS-ox, ty*TS-oy); }));
+    }
+  await Promise.all(jobs);
+  // Rastro
+  const t = document.createElement('canvas'); t.width = W; t.height = H; const tg = t.getContext('2d'); tg.fillStyle = '#e8a33d';
+  data.trail.forEach(p => { const mpp = 156543.03*Math.cos(p[0]*Math.PI/180)/2**z, r = Math.max(2, RADIUS/mpp);
+    tg.beginPath(); tg.arc(projX(p[1],z)-ox, projY(p[0],z)-oy, r, 0, 7); tg.fill(); });
+  g.globalAlpha = .55; g.drawImage(t,0,0); g.globalAlpha = 1;
+  // Setas numeradas
+  data.setas.forEach((s,i) => { const x = projX(s.lng,z)-ox, y = projY(s.lat,z)-oy;
+    g.beginPath(); g.arc(x,y,15,0,7); g.fillStyle = '#c8553d'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke();
+    g.fillStyle = '#fff'; g.font = 'bold 15px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(i+1, x, y+1); });
+  g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(W-230,H-22,230,22); g.fillStyle = '#333'; g.font = '12px sans-serif'; g.textAlign='right';
+  g.fillText(satOn ? '© Esri World Imagery' : '© colaboradores de OpenStreetMap', W-8, H-10);
+  return c.toDataURL('image/jpeg', .85);
+}
+
+const pdfDate = t => new Date(t).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+async function buildPdf(){
+  const {jsPDF} = await loadJsPDF();
+  const img = await renderMapImage(1600, 1100);
+  const doc = new jsPDF({unit:'mm', format:'a4'}); const M = 12, PW = 210 - 2*M;
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(43,58,44); doc.text('Rastro Seta - informe de salida', M, 18);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60);
+  const times = data.setas.map(s=>s.t), area = Math.round(data.trail.length * MIN_STEP * RADIUS * 2);
+  let y = 25;
+  doc.text(`Generado el ${pdfDate(Date.now())}`, M, y); y += 5;
+  if (times.length) { doc.text(`Setas recogidas entre ${pdfDate(Math.min(...times))} y ${pdfDate(Math.max(...times))}`, M, y); y += 5; }
+  doc.text(`Zona recorrida aprox.: ${area} m2   ·   Setas encontradas: ${data.setas.length}`, M, y); y += 4;
+  const ih = PW * 1100/1600; doc.addImage(img, 'JPEG', M, y, PW, ih); doc.setDrawColor(150); doc.rect(M, y, PW, ih); y += ih + 7;
   const counts = {}; data.setas.forEach(s => counts[s.species] = (counts[s.species]||0)+1);
-  const summary = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)}: <b>${v}</b>`).join(' · ');
-  $('report').innerHTML = `<h1>🍄 Rastro Seta — informe de salida</h1>
-    <p>Generado el ${fmtDate(Date.now())}${times.length ? ` · Setas recogidas entre ${fmtDate(Math.min(...times))} y ${fmtDate(Math.max(...times))}` : ''}<br>
-    Zona recorrida aprox.: ${area} m² · Setas encontradas: <b>${data.setas.length}</b>${summary ? '<br>' + summary : ''}</p>`;
-  const tableHtml = data.setas.length
-    ? `<table><thead><tr><th>Nº</th><th>Especie</th><th>Fecha y hora</th><th>Ubicación</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`
-    : '<p>No se registraron setas en esta salida.</p>';
-  let after = document.getElementById('reportAfter');
-  if (!after) { after = document.createElement('div'); after.id = 'reportAfter'; after.className = 'printOnly'; document.body.appendChild(after); }
-  after.innerHTML = tableHtml;
-  document.body.classList.add('printing');
-  setTimeout(() => {
-    map.invalidateSize(); map.fitBounds(L.latLngBounds(pts), {padding:[30,30], maxZoom:19});
-    let done = false; const go = () => { if (done) return; done = true; setTimeout(() => window.print(), 400); };
-    (satOn?sat:osm).once('load', go); setTimeout(go, 3500);
-  }, 100);
-  window.onafterprint = () => { document.body.classList.remove('printing'); follow = wasFollow; map.invalidateSize(); };
+  if (data.setas.length) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(43,58,44); doc.text('Resumen por especie', M, y); y += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40);
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => { if (y > 280) { doc.addPage(); y = 18; } doc.text(`- ${k}: ${v}`, M+2, y); y += 5; });
+    y += 4;
+    const cols = [[M,'Nº',10],[M+10,'Especie',62],[M+72,'Fecha y hora',32],[M+104,'Ubicación',40],[M+144,'Notas',42]];
+    const header = () => { doc.setFillColor(233,226,208); doc.rect(M, y-4.5, PW, 7, 'F'); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      cols.forEach(([x,t]) => doc.text(t, x+1.5, y)); y += 6; doc.setFont('helvetica','normal'); };
+    if (y > 260) { doc.addPage(); y = 18; }
+    header();
+    data.setas.forEach((s,i) => {
+      const cells = [String(i+1), doc.splitTextToSize(s.species, 59), pdfDate(s.t), [fmtLat(s.lat), fmtLng(s.lng)], doc.splitTextToSize(s.note||'', 40)];
+      const h = Math.max(...cells.map(c => Array.isArray(c) ? c.length : 1)) * 4 + 2;
+      if (y + h > 285) { doc.addPage(); y = 18; header(); }
+      cols.forEach(([x,,w],j) => doc.text(cells[j], x+1.5, y));
+      doc.setDrawColor(200); doc.line(M, y+h-3.5, M+PW, y+h-3.5); y += h;
+    });
+  } else { doc.text('No se registraron setas en esta salida.', M, y); }
+  return doc.output('blob');
+}
+
+const pdfName = () => 'rastro-seta-' + new Date().toISOString().slice(0,10) + '.pdf';
+const summaryText = () => {
+  const lines = data.setas.map((s,i) => `${i+1}. ${s.species} - ${pdfDate(s.t)}\n   https://maps.google.com/?q=${s.lat},${s.lng}${s.note ? '\n   ' + s.note : ''}`);
+  return `🍄 Rastro Seta - salida del ${new Date().toLocaleDateString('es-ES')}\nSetas encontradas: ${data.setas.length}\n\n${lines.join('\n')}`;
 };
+let pdfBlob = null;
+$('bPdf').onclick = async () => {
+  if (!data.trail.length && !data.setas.length) { alert('Todavía no hay rastro ni setas que exportar.'); return; }
+  $('pdfMsg').textContent = 'Generando PDF…'; $('pdfBtns').style.display = 'none'; $('pdfModal').classList.add('show');
+  try { pdfBlob = await buildPdf(); $('pdfMsg').textContent = 'Informe listo.'; $('pdfBtns').style.display = 'flex';
+        $('pShare').style.display = (navigator.canShare && navigator.canShare({files:[new File([pdfBlob], pdfName(), {type:'application/pdf'})]})) ? 'block' : 'none'; }
+  catch(e) { $('pdfMsg').textContent = 'Error: ' + e.message + '. Comprueba la conexión.'; $('pdfBtns').style.display = 'flex'; }
+};
+$('pShare').onclick = async () => {
+  try { await navigator.share({files:[new File([pdfBlob], pdfName(), {type:'application/pdf'})], title:'Rastro Seta', text:'Informe de mi salida a por setas'}); }
+  catch(e) { if (e.name !== 'AbortError') alert('No se pudo compartir: ' + e.message); }
+};
+$('pDown').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(pdfBlob); a.download = pdfName(); document.body.appendChild(a); a.click(); a.remove(); };
+$('pOpen').onclick = () => { const u = URL.createObjectURL(pdfBlob); window.open(u, '_blank') || (location.href = u); };
+$('pWa').onclick = () => { window.open('https://wa.me/?text=' + encodeURIComponent(summaryText()), '_blank'); };
+$('pClose').onclick = () => $('pdfModal').classList.remove('show');
+$('pdfModal').onclick = e => { if (e.target.id === 'pdfModal') $('pdfModal').classList.remove('show'); };
 
 // ---------- PWA: actualización automática ----------
 if ('serviceWorker' in navigator) {
